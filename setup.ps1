@@ -1,63 +1,35 @@
-# setup.ps1
-# Chạy script này sau khi clone repo về để cài đặt môi trường
-# Usage: .\setup.ps1
+Write-Host "TNBIKE Pipeline - Setup" -ForegroundColor Cyan
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " TNBIKE Pipeline — Setup" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-
-# 1. Tạo các thư mục cần thiết
-Write-Host "`n[1/5] Tạo thư mục..." -ForegroundColor Yellow
-$dirs = @("staging", "staging\pdf", "data", "data\eml", "logs")
-foreach ($dir in $dirs) {
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Write-Host "  + Tạo: $dir" -ForegroundColor Green
-    } else {
-        Write-Host "  ✓ Đã có: $dir" -ForegroundColor Gray
-    }
-}
-
-# 2. Tạo file .env từ .env.example
-Write-Host "`n[2/5] Cấu hình môi trường..." -ForegroundColor Yellow
+Write-Host "[1/3] Cau hinh moi truong..." -ForegroundColor Yellow
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
-    Write-Host "  + Đã tạo .env từ .env.example" -ForegroundColor Green
-    Write-Host "  ! Nhớ mở .env và điền PG_PASSWORD trước khi chạy pipeline" -ForegroundColor Red
+    Write-Host "  + Da tao .env tu .env.example" -ForegroundColor Green
+    Write-Host "  ! Nho mo .env va dien PG_PASSWORD truoc khi chay pipeline" -ForegroundColor Red
 } else {
-    Write-Host "  ✓ .env đã tồn tại" -ForegroundColor Gray
+    Write-Host "  OK: .env da ton tai" -ForegroundColor Gray
 }
 
-# 3. Tạo virtual environment
-Write-Host "`n[3/5] Tạo virtual environment..." -ForegroundColor Yellow
+Write-Host "[2/3] Tao virtual environment..." -ForegroundColor Yellow
 if (-not (Test-Path "venv")) {
     python -m venv venv
-    Write-Host "  + Đã tạo venv" -ForegroundColor Green
+    Write-Host "  + Da tao venv" -ForegroundColor Green
 } else {
-    Write-Host "  ✓ venv đã tồn tại" -ForegroundColor Gray
+    Write-Host "  OK: venv da ton tai" -ForegroundColor Gray
 }
 
-# 4. Cài thư viện
-Write-Host "`n[4/5] Cài đặt thư viện Python..." -ForegroundColor Yellow
+Write-Host "[3/3] Cai dat thu vien Python..." -ForegroundColor Yellow
 & "venv\Scripts\pip.exe" install -r requirements.txt --quiet
-Write-Host "  ✓ Đã cài xong requirements.txt" -ForegroundColor Green
+Write-Host "  OK: Da cai xong requirements.txt" -ForegroundColor Green
 
-# 5. Hướng dẫn tiếp theo
-Write-Host "`n[5/5] Hướng dẫn tiếp theo:" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Bước 1: Điền password PostgreSQL vào .env" -ForegroundColor White
-Write-Host "          notepad .env" -ForegroundColor Cyan
+Write-Host "Setup xong! Lam them 3 buoc sau:" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Bước 2: Tạo bảng email_log trong DB" -ForegroundColor White
-Write-Host "          psql -U postgres -d tnbike_db -f sql\00_email_log_table.sql" -ForegroundColor Cyan
+Write-Host "  1. Dien password PostgreSQL vao .env"
+Write-Host "     notepad .env"
 Write-Host ""
-Write-Host "  Bước 3: Copy 1.132 file .eml vào thư mục data\eml\" -ForegroundColor White
-Write-Host "          copy C:\path\to\eml\*.eml data\eml\" -ForegroundColor Cyan
+Write-Host "  2. Tao bang email_log trong DB"
+Write-Host "     psql -U postgres -d tnbike_db -f sql\00_email_log_table.sql"
 Write-Host ""
-Write-Host "  Bước 4: Kích hoạt venv và chạy pipeline" -ForegroundColor White
-Write-Host "          venv\Scripts\activate" -ForegroundColor Cyan
-Write-Host "          python src\run_pipeline.py" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " Setup hoàn tất!" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  3. Copy 1132 file .eml vao data\eml\ roi chay:"
+Write-Host "     venv\Scripts\activate"
+Write-Host "     python src\run_pipeline.py"

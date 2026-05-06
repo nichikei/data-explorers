@@ -4,8 +4,9 @@ extract_email.py — STAGE 1
 Duyệt thư mục .eml, mỗi file:
   1. Parse header (Message-ID, From, Subject, Date)
   2. Tách PDF đính kèm theo cấu trúc MIME
-  3. Lưu PDF vào ./staging/pdf/<so_number>.pdf
-  4. INSERT email_log với processing_status = 'PENDING'
+  3. Parse tên đại lý từ email body (tiếng Việt chuẩn, không bị vỡ font)
+  4. Lưu PDF vào ./staging/pdf/<so_number>.pdf
+  5. INSERT email_log với processing_status = 'PENDING'
      (UPSERT — re-run sẽ update thay vì lỗi UNIQUE)
 
 Đầu ra: bảng email_log có 1.132 dòng PENDING (lần chạy đầu).
@@ -27,10 +28,50 @@ log = logging.getLogger("stage1.email")
 # Subject thường có dạng: "Đặt hàng BH26.0935 - Long Phú" hoặc "[BH26.0935] Đơn hàng..."
 SO_NUMBER_RE = re.compile(r"BH\d{2}\.\d{4}", re.IGNORECASE)
 
+# Tên đại lý trong email body — thử nhiều pattern vì format không cố định
+# Ví dụ: "Đại lý: CÔNG TY TNHH THƯƠNG MẠI LONG PHÚ"
+#         "Tên đại lý: Cửa hàng xe đạp Minh Tân"
+#         "Khách hàng: CÔNG TY CỔ PHẦN NAM TIẾN"
+CUSTOMER_NAME_RE = re.compile(r"(?:Đại lý|Tên|Khách hàng)\s*:\s*(.+)", re.IGNORECASE)
+
+
+def extract_body_text(msg) -> str:
+    """Lấy nội dung text/plain từ email (decode đúng charset)."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "text/plain":
+                charset = part.get_content_charset() or "utf-8"
+                try:
+                    return part.get_payload(decode=True).decode(charset, errors="replace")
+                except Exception:
+                    return part.get_payload(decode=True).decode("utf-8", errors="replace")
+    else:
+        if msg.get_content_type() == "text/plain":
+            charset = msg.get_content_charset() or "utf-8"
+            try:
+                return msg.get_payload(decode=True).decode(charset, errors="replace")
+            except Exception:
+                pass
+    return ""
+
+
+def parse_customer_name_from_body(body: str) -> Optional[str]:
+    if not body:
+        return None
+    m = CUSTOMER_NAME_RE.search(body)
+    if m:
+        name = m.group(1).strip()
+        # Strip prefix "Tên :" nếu bị dính vào
+        name = re.sub(r"^Tên\s*:\s*", "", name, flags=re.IGNORECASE).strip()
+        name = name.rstrip(".,;:")
+        if len(name) >= 4:
+            return name[:200]
+    return None
+
 
 def parse_eml_file(eml_path: Path) -> Optional[dict]:
     """
-    Parse một file .eml, trích header và tách PDF đính kèm.
+    Parse một file .eml, trích header, body và tách PDF đính kèm.
     Return dict hoặc None nếu lỗi không thể recover.
     """
     try:
@@ -56,6 +97,10 @@ def parse_eml_file(eml_path: Path) -> Optional[dict]:
     so_match = SO_NUMBER_RE.search(subject) or SO_NUMBER_RE.search(eml_path.stem)
     so_number = so_match.group(0).upper() if so_match else None
 
+    # ----- Tên đại lý từ body (tiếng Việt chuẩn) -----
+    body_text          = extract_body_text(msg)
+    customer_name_raw  = parse_customer_name_from_body(body_text)
+
     # ----- Tách PDF đính kèm -----
     pdf_bytes, pdf_name = extract_pdf_attachment(msg)
     if pdf_bytes is None:
@@ -64,6 +109,7 @@ def parse_eml_file(eml_path: Path) -> Optional[dict]:
             "message_id": message_id, "from_address": from_addr,
             "subject": subject, "received_at": received_at,
             "attachment_name": None, "so_number": so_number,
+            "customer_name_raw": customer_name_raw,
             "pdf_path": None, "error": "NO_PDF_ATTACHMENT",
         }
 
@@ -73,14 +119,15 @@ def parse_eml_file(eml_path: Path) -> Optional[dict]:
     out_path.write_bytes(pdf_bytes)
 
     return {
-        "message_id":     message_id,
-        "from_address":   from_addr,
-        "subject":        subject,
-        "received_at":    received_at,
-        "attachment_name": pdf_name,
-        "so_number":      so_number,
-        "pdf_path":       str(out_path),
-        "error":          None,
+        "message_id":       message_id,
+        "from_address":     from_addr,
+        "subject":          subject,
+        "received_at":      received_at,
+        "attachment_name":  pdf_name,
+        "so_number":        so_number,
+        "customer_name_raw": customer_name_raw,
+        "pdf_path":         str(out_path),
+        "error":            None,
     }
 
 
@@ -95,9 +142,7 @@ def extract_pdf_attachment(msg) -> Tuple[Optional[bytes], Optional[str]]:
     """
     for part in msg.walk():
         ctype = part.get_content_type()
-        disp  = (part.get("Content-Disposition") or "").lower()
         fname = part.get_filename() or ""
-        # Bắt PDF qua content-type HOẶC qua tên file kết thúc .pdf
         if ctype == "application/pdf" or fname.lower().endswith(".pdf"):
             payload = part.get_payload(decode=True)
             if payload:
@@ -110,14 +155,16 @@ def extract_pdf_attachment(msg) -> Tuple[Optional[bytes], Optional[str]]:
 # ----------------------------------------------------------------------------
 UPSERT_SQL = """
 INSERT INTO email_log (message_id, from_address, subject, received_at,
-                       attachment_name, so_number, processing_status)
-VALUES (%s, %s, %s, %s, %s, %s, %s)
+                       attachment_name, so_number, processing_status,
+                       customer_name_raw)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (message_id) DO UPDATE SET
-    from_address    = EXCLUDED.from_address,
-    subject         = EXCLUDED.subject,
-    received_at     = EXCLUDED.received_at,
-    attachment_name = EXCLUDED.attachment_name,
-    so_number       = EXCLUDED.so_number
+    from_address       = EXCLUDED.from_address,
+    subject            = EXCLUDED.subject,
+    received_at        = EXCLUDED.received_at,
+    attachment_name    = EXCLUDED.attachment_name,
+    so_number          = EXCLUDED.so_number,
+    customer_name_raw  = EXCLUDED.customer_name_raw
 WHERE email_log.processing_status IN ('PENDING','FAILED')
 RETURNING log_id, processing_status;
 """
@@ -153,6 +200,7 @@ def run() -> int:
                     meta["attachment_name"],
                     meta["so_number"],
                     status,
+                    meta["customer_name_raw"],
                 ))
                 if meta["error"]:
                     cur.execute(

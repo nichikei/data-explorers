@@ -5,7 +5,8 @@ load_db.py — STAGE 4
   1. Resolve customer:
        a. Match exact tax_code → existing customer_code
        b. Fuzzy match customer_name → existing
-       c. Tạo mới: KH-XXXXX (next_id từ MAX)
+       c. Tạo mới: KH-XXXXX — ưu tiên dùng customer_name_raw (từ email body,
+          tiếng Việt chuẩn) thay vì tên từ PDF (có thể bị vỡ font)
   2. INSERT sales_order (so_number UNIQUE, trigger sẽ auto fill total_*)
   3. INSERT order_line (FK order_id)
   4. UPDATE email_log: LOADED, processed_at=NOW()
@@ -34,7 +35,6 @@ def normalize_name(name: str) -> str:
         return ""
     s = name.lower()
     s = re.sub(r"\s+", " ", s).strip()
-    # Bỏ tiền tố thường gặp
     for prefix in ("công ty cổ phần", "công ty tnhh", "công ty cp", "cty tnhh", "cty"):
         if s.startswith(prefix):
             s = s[len(prefix):].strip()
@@ -45,13 +45,13 @@ class CustomerResolver:
     """
     Cache toàn bộ customer vào memory một lần, resolve bằng:
         1. tax_code (exact)
-        2. normalized name (fuzzy ≥ 92)
-        3. tạo mới — generate KH-XXXXX
+        2. normalized name (fuzzy ≥ 92) — dùng customer_name_raw nếu có
+        3. tạo mới — generate KH-XXXXX, lưu tên sạch từ email body
     """
     def __init__(self):
-        self.by_tax: dict[str, str]   = {}     # tax_code → customer_code
-        self.by_norm_name: dict[str, str] = {} # normalized name → customer_code
-        self.all_norm_names: list[str] = []
+        self.by_tax: dict[str, str]       = {}  # tax_code → customer_code
+        self.by_norm_name: dict[str, str] = {}  # normalized name → customer_code
+        self.all_norm_names: list[str]    = []
         self.next_id: int = 1
         self._load()
 
@@ -68,7 +68,6 @@ class CustomerResolver:
                     if n:
                         self.by_norm_name[n] = code
                         self.all_norm_names.append(n)
-                # next_id = max + 1
                 cur.execute(
                     "SELECT COALESCE(MAX(SUBSTRING(customer_code FROM 4)::INT), 0) "
                     "FROM customer WHERE customer_code ~ '^KH-\\d+$'"
@@ -76,22 +75,35 @@ class CustomerResolver:
                 self.next_id = (cur.fetchone()[0] or 0) + 1
 
     def resolve(self, conn, name: str, tax_code: Optional[str],
-                address: Optional[str]) -> str:
-        # 1) exact tax_code
+                address: Optional[str],
+                name_from_email: Optional[str] = None) -> str:
+        """
+        Resolve hoặc tạo mới customer.
+
+        name            — tên lấy từ PDF (có thể bị vỡ font)
+        name_from_email — tên lấy từ email body (tiếng Việt chuẩn, ưu tiên hơn)
+        """
+        # Tên sạch để dùng khi tạo mới hoặc fuzzy match
+        clean_name = name_from_email if name_from_email else name
+
+        # 1) Exact tax_code
         if tax_code and tax_code in self.by_tax:
             return self.by_tax[tax_code]
 
-        # 2) fuzzy name
-        norm = normalize_name(name)
+        # 2) Fuzzy match theo tên sạch (chỉ khi không có MST)
+        norm = normalize_name(clean_name)
         if not tax_code and norm and self.all_norm_names:
-            best, score, _ = process.extractOne(
+            result = process.extractOne(
                 norm, self.all_norm_names, scorer=fuzz.token_set_ratio
-            ) or (None, 0, None)
-            if best and score >= 92:
-                return self.by_norm_name[best]
+            )
+            if result:
+                best, score, _ = result
+                if best and score >= 92:
+                    return self.by_norm_name[best]
 
-        # 3) new customer
-        new_code = f"KH-{self.next_id:05d}"
+        # 3) Tạo mới — dùng tên sạch từ email body nếu có
+        new_code    = f"KH-{self.next_id:05d}"
+        insert_name = clean_name or "Khách lẻ"
         self.next_id += 1
 
         with conn.cursor() as cur:
@@ -100,15 +112,17 @@ class CustomerResolver:
                                       address, customer_tier, is_active)
                 VALUES (%s, %s, %s, %s, 'STANDARD', TRUE)
                 ON CONFLICT (customer_code) DO NOTHING
-            """, (new_code, name, tax_code, address))
+            """, (new_code, insert_name, tax_code, address))
 
-        # cache
+        # Cập nhật cache
         if tax_code:
             self.by_tax[tax_code] = new_code
-        if norm:
-            self.by_norm_name[norm] = new_code
-            self.all_norm_names.append(norm)
-        log.info("Tạo mới đại lý %s (%s, MST=%s)", new_code, name, tax_code)
+        norm_new = normalize_name(insert_name)
+        if norm_new:
+            self.by_norm_name[norm_new] = new_code
+            self.all_norm_names.append(norm_new)
+
+        log.info("Tạo mới đại lý %s (%s, MST=%s)", new_code, insert_name, tax_code)
         return new_code
 
 
@@ -129,7 +143,8 @@ VALUES (%s, %s, %s, %s, %s, %s);
 """
 
 
-def load_one(conn, payload: dict, resolver: CustomerResolver) -> Optional[int]:
+def load_one(conn, payload: dict, name_from_email: Optional[str],
+             resolver: CustomerResolver) -> Optional[int]:
     """Insert 1 đơn (sales_order + order_lines) trong 1 transaction. Trả order_id."""
     header = payload["header"]
     lines  = payload["lines"]
@@ -139,6 +154,7 @@ def load_one(conn, payload: dict, resolver: CustomerResolver) -> Optional[int]:
         name=header.get("customer_name") or "Khách lẻ",
         tax_code=header.get("tax_code"),
         address=header.get("address"),
+        name_from_email=name_from_email,  # ← tên sạch từ email body
     )
 
     with conn.cursor() as cur:
@@ -171,11 +187,11 @@ def run() -> tuple[int, int]:
     log.info("  - by_tax=%d, by_name=%d, next_id=KH-%05d",
              len(resolver.by_tax), len(resolver.by_norm_name), resolver.next_id)
 
-    # Lấy danh sách payload đã VALIDATED
+    # Lấy danh sách payload đã VALIDATED — kèm customer_name_raw từ email body
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT log_id, extracted_payload
+                SELECT log_id, extracted_payload, customer_name_raw
                 FROM email_log
                 WHERE processing_status = 'VALIDATED'
                 ORDER BY log_id
@@ -189,12 +205,11 @@ def run() -> tuple[int, int]:
     log.info("Stage 4: load %d đơn vào DB", len(rows))
     ok, fail = 0, 0
 
-    for log_id, payload_json in tqdm(rows, desc="Loading DB"):
+    for log_id, payload_json, customer_name_raw in tqdm(rows, desc="Loading DB"):
         payload = payload_json if isinstance(payload_json, dict) else json.loads(payload_json)
-        # Mỗi đơn 1 connection riêng → mỗi đơn 1 transaction độc lập
         try:
             with get_conn() as conn:
-                order_id = load_one(conn, payload, resolver)
+                order_id = load_one(conn, payload, customer_name_raw, resolver)
                 with conn.cursor() as cur:
                     cur.execute("""UPDATE email_log
                                    SET processing_status='LOADED', processed_at=NOW(),

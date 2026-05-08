@@ -33,3 +33,10 @@ desktop.ini
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# ── Generated exports ─────────────────────────────────────────
+tnbike_export_*.xlsx
+csv/
+
+# ── Claude Code internal ──────────────────────────────────────
+.claude/

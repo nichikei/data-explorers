@@ -71,7 +71,7 @@ def mom_waterfall():
         SELECT
             label,
             revenue,
-            revenue - LAG(revenue) OVER (ORDER BY fiscal_year, fiscal_month) AS mom_change
+            COALESCE(revenue - LAG(revenue) OVER (ORDER BY fiscal_year, fiscal_month), 0) AS mom_change
         FROM monthly
         ORDER BY fiscal_year, fiscal_month
     """)

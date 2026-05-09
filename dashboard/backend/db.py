@@ -32,7 +32,7 @@ def get_pool() -> pool.SimpleConnectionPool:
 
 
 def query(sql: str, params=None) -> pd.DataFrame:
-    """Execute SELECT and return DataFrame. NaN → None for JSON safety."""
+    """Execute SELECT and return DataFrame. NaN/None handled for JSON safety."""
     p = get_pool()
     conn = p.getconn()
     try:
@@ -40,9 +40,15 @@ def query(sql: str, params=None) -> pd.DataFrame:
         with conn.cursor() as cur:
             cur.execute("SET search_path TO tnbike, public;")
         df = pd.read_sql(sql, conn, params=params)
-        return df.where(pd.notna(df), other=None)
+        # Convert to object dtype so None replaces NaN properly before JSON
+        return df.astype(object).where(pd.notna(df), other=None)
     finally:
         p.putconn(conn)
+
+
+def df_to_records(df: pd.DataFrame) -> list:
+    """Safe JSON-serializable records — converts NaN to null via JSON round-trip."""
+    return json.loads(df.to_json(orient="records"))
 
 
 def scalar(sql: str, params=None):

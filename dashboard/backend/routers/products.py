@@ -9,14 +9,13 @@ def hierarchy():
     """Group → Line → SKU with revenue for sunburst."""
     df = query("""
         SELECT
-            group_name,
-            COALESCE(line_name, 'Chưa phân loại') AS line_name,
+            COALESCE(group_name, 'Chưa phân loại') AS group_name,
+            COALESCE(line_name,  'Chưa phân loại') AS line_name,
             product_code,
             COALESCE(product_name, product_code)   AS product_name,
             SUM(line_total) AS revenue,
             SUM(quantity)   AS quantity
         FROM fact_sales
-        WHERE group_name IS NOT NULL
         GROUP BY group_name, line_name, product_code, product_name
         ORDER BY revenue DESC
     """)
@@ -29,13 +28,12 @@ def bcg():
     df = query("""
         WITH data AS (
             SELECT
-                group_name,
+                COALESCE(group_name, 'Chưa phân loại') AS group_name,
                 SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END) AS q1_2025,
                 SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) AS q1_2026,
                 SUM(line_total)  AS total_rev,
                 SUM(quantity)    AS total_qty
             FROM fact_sales
-            WHERE group_name IS NOT NULL
             GROUP BY group_name
         ),
         total AS (SELECT SUM(total_rev) AS t FROM data)
@@ -78,14 +76,13 @@ def bcg_line():
     df = query("""
         WITH data AS (
             SELECT
-                line_name,
-                group_name,
+                COALESCE(line_name, 'Chưa phân loại') AS line_name,
+                COALESCE(group_name, 'Chưa phân loại') AS group_name,
                 SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END) AS q1_2025,
                 SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) AS q1_2026,
                 SUM(line_total)  AS total_rev,
                 SUM(quantity)    AS total_qty
             FROM fact_sales
-            WHERE group_name IS NOT NULL AND line_name IS NOT NULL
             GROUP BY line_name, group_name
         ),
         total AS (SELECT SUM(total_rev) AS t FROM data)

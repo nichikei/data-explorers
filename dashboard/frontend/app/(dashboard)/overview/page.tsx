@@ -164,18 +164,34 @@ export default function OverviewPage() {
 
         {/* Group donut */}
         <Card>
-          <CardHeader><CardTitle className="text-sm">Cơ cấu nhóm SP — T3/2026</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              Cơ cấu nhóm SP — T3/2026
+              {groups.some(g => g.group_name === "Chưa phân loại") && (
+                <span className="text-[9px] font-normal text-amber-400 border border-amber-500/30 rounded px-1 py-0.5">
+                  ⚠ 72 SKU chưa map nhóm
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
           <CardContent>
             {groups.length === 0 ? <Skeleton className="h-48" /> : (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={groups} dataKey="revenue" nameKey="group_name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                    {groups.map(g => <Cell key={g.group_name} fill={GROUP_COLORS[g.group_name] ?? "#6b7280"} />)}
-                  </Pie>
-                  <Tooltip formatter={(v, n) => [formatVND(Number(v ?? 0)), String(n)]} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                </PieChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={groups} dataKey="revenue" nameKey="group_name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                      {groups.map(g => <Cell key={g.group_name} fill={GROUP_COLORS[g.group_name] ?? "#6b7280"} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [formatVND(Number(v ?? 0)), String(n)]} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {groups.some(g => g.group_name === "Chưa phân loại") && (
+                  <p className="text-[9px] text-muted-foreground text-center mt-1">
+                    "Chưa phân loại" = 72/247 SKU không có line_id trong danh mục sản phẩm (vấn đề chất lượng dữ liệu nguồn)
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

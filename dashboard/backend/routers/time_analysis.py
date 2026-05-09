@@ -11,12 +11,11 @@ def monthly():
             fiscal_year,
             fiscal_month,
             TO_CHAR(DATE_TRUNC('month', MIN(order_date)), 'YYYY-MM-DD') AS period,
-            group_name,
+            COALESCE(group_name, 'Chưa phân loại') AS group_name,
             SUM(line_total)           AS revenue,
             SUM(quantity)             AS quantity,
             COUNT(DISTINCT so_number) AS orders
         FROM fact_sales
-        WHERE group_name IS NOT NULL
         GROUP BY fiscal_year, fiscal_month, group_name
         ORDER BY fiscal_year, fiscal_month, revenue DESC
     """)
@@ -27,7 +26,7 @@ def monthly():
 def yoy_q1():
     df = query("""
         SELECT
-            group_name,
+            COALESCE(group_name, 'Chưa phân loại') AS group_name,
             SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END) AS q1_2025,
             SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) AS q1_2026,
             ROUND(
@@ -37,7 +36,6 @@ def yoy_q1():
                 NULLIF(SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END), 0)
             , 1) AS yoy_pct
         FROM fact_sales
-        WHERE group_name IS NOT NULL
         GROUP BY group_name
         ORDER BY q1_2026 DESC NULLS LAST
     """)

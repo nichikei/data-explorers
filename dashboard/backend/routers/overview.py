@@ -68,12 +68,11 @@ def kpi():
 def group_revenue():
     df = query("""
         SELECT
-            group_name,
+            COALESCE(group_name, 'Chưa phân loại') AS group_name,
             SUM(line_total) AS revenue,
             SUM(quantity)   AS quantity
         FROM fact_sales
         WHERE fiscal_year = 2026 AND fiscal_month = 3
-          AND group_name IS NOT NULL
         GROUP BY group_name
         ORDER BY revenue DESC
     """)

@@ -83,7 +83,10 @@ export default function TimePage() {
       {/* Stacked area chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Doanh thu tháng theo nhóm sản phẩm</CardTitle>
+          <CardTitle className="text-sm flex items-center gap-2">
+            Doanh thu tháng theo nhóm sản phẩm
+            <span className="text-[9px] font-normal text-amber-400 border border-amber-500/30 rounded px-1 py-0.5">⚠ 72 SKU chưa map nhóm</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {areaData.length === 0 ? <Skeleton className="h-64" /> : (

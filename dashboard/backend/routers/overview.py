@@ -10,10 +10,12 @@ def kpi():
         WITH monthly AS (
             SELECT
                 fiscal_year, fiscal_month,
-                SUM(line_total)              AS revenue,
-                COUNT(DISTINCT so_number)    AS orders,
-                SUM(quantity)                AS qty,
-                COUNT(DISTINCT customer_code) AS dealers
+                SUM(line_total)                             AS revenue,
+                COUNT(DISTINCT so_number)                   AS orders,
+                SUM(quantity)                               AS qty,
+                COUNT(*)                                    AS total_lines,
+                COUNT(DISTINCT customer_code)               AS dealers,
+                ROUND(SUM(line_total) / NULLIF(SUM(quantity), 0), 0) AS avg_unit_price
             FROM fact_sales
             GROUP BY fiscal_year, fiscal_month
         ),
@@ -45,7 +47,9 @@ def kpi():
             cur.orders,
             cur.qty,
             cur.dealers,
-            ROUND(cur.revenue / NULLIF(cur.dealers, 0), 0) AS avg_per_dealer,
+            ROUND(cur.revenue / NULLIF(cur.dealers, 0), 0)     AS avg_per_dealer,
+            ROUND(cur.avg_unit_price, 0)                        AS avg_unit_price,
+            ROUND(cur.total_lines::numeric / NULLIF(cur.orders, 0), 1) AS lines_per_order,
             ROUND(100.0 * (cur.revenue - prev.revenue) / NULLIF(prev.revenue, 0), 1) AS mom_revenue_pct,
             ROUND(100.0 * (cur.orders  - prev.orders)  / NULLIF(prev.orders,  0), 1) AS mom_orders_pct,
             ROUND(100.0 * (cur.revenue - yoy.revenue)  / NULLIF(yoy.revenue,  0), 1) AS yoy_revenue_pct,

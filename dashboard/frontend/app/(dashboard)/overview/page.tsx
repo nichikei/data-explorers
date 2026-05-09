@@ -14,7 +14,8 @@ import {
 
 interface KPI {
   revenue: number; orders: number; qty: number; dealers: number;
-  avg_per_dealer: number; mom_revenue_pct: number; mom_orders_pct: number;
+  avg_per_dealer: number; avg_unit_price: number; lines_per_order: number;
+  mom_revenue_pct: number; mom_orders_pct: number;
   yoy_revenue_pct: number; active_dealers: number; pareto_top20_pct: number;
 }
 interface GroupRevenue { group_name: string; revenue: number; pct: number; }
@@ -69,8 +70,8 @@ export default function OverviewPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<KPI>("/api/overview/kpi"),
-      apiFetch<GroupRevenue[]>("/api/overview/group_revenue"),
-      apiFetch<Sparkline[]>("/api/overview/sparkline"),
+      apiFetch<GroupRevenue[]>("/api/overview/group_revenue", []),
+      apiFetch<Sparkline[]>("/api/overview/sparkline", []),
       apiFetch<Pipeline>("/api/operations/pipeline"),
     ]).then(([k, g, s, p]) => { setKpi(k); setGroups(g); setSpark(s); setPipeline(p); });
   }, []);
@@ -82,16 +83,19 @@ export default function OverviewPage() {
 
   const insights = kpi ? [
     {
-      title: "Phát hiện",
-      text: `Doanh thu T3/2026 đạt ${formatVND(kpi.revenue)} (${pct(kpi.mom_revenue_pct)} MoM, ${pct(kpi.yoy_revenue_pct)} YoY).`,
+      phat_hien: `Doanh thu T3/2026 đạt ${formatVND(kpi.revenue)} — tăng ${pct(kpi.mom_revenue_pct)} so với T2/2026 và ${pct(kpi.yoy_revenue_pct)} so với T3/2025.`,
+      y_nghia: "Tháng 3 là cao điểm mùa xuân — nhu cầu xe đạp tăng mạnh trước mùa hè, phản ánh chu kỳ kinh doanh B2B của Thống Nhất Bike.",
+      hanh_dong: `Đẩy mạnh dự trữ kho và đàm phán với đại lý trong tháng 4 để duy trì đà tăng trưởng sang Q2/2026.`,
     },
     {
-      title: "Đại lý hoạt động",
-      text: `${formatNum(kpi.active_dealers)}/${formatNum(kpi.dealers)} đại lý có đơn hàng trong 45 ngày gần nhất.`,
+      phat_hien: `${formatNum(kpi.active_dealers)}/${formatNum(kpi.dealers)} đại lý (${((kpi.active_dealers / kpi.dealers) * 100).toFixed(0)}%) có đơn hàng trong 45 ngày gần nhất. ${formatNum(kpi.dealers - kpi.active_dealers)} đại lý nguy cơ churn.`,
+      y_nghia: "Gần một nửa mạng lưới đại lý đang im lặng — đây là dấu hiệu sớm của rủi ro doanh thu nếu không can thiệp kịp thời.",
+      hanh_dong: "Triển khai chiến dịch tái kích hoạt: gọi điện trực tiếp cho top 50 đại lý chưa đặt hàng, kèm ưu đãi chiết khấu thêm 2–3% cho đơn đầu Q2.",
     },
     {
-      title: "Pareto 80/20",
-      text: `Top 20% đại lý đóng góp ${kpi.pareto_top20_pct?.toFixed(1)}% tổng doanh thu — tập trung chăm sóc nhóm này.`,
+      phat_hien: `Top 20% đại lý (≈${formatNum(Math.round(kpi.dealers * 0.2))} đại lý) tạo ra ${kpi.pareto_top20_pct?.toFixed(1)}% tổng doanh thu — Pareto 80/20 đang hoạt động rõ rệt.`,
+      y_nghia: "Mức độ tập trung doanh thu cao đồng nghĩa rủi ro lớn nếu mất bất kỳ đại lý trọng yếu nào — cần chương trình giữ chân chuyên biệt.",
+      hanh_dong: `Lập danh sách VIP cho nhóm top 20% (${formatNum(Math.round(kpi.dealers * 0.2))} đại lý), phân công account manager và ưu tiên hạn mức tín dụng trong Q2/2026.`,
     },
   ] : [];
 
@@ -102,18 +106,25 @@ export default function OverviewPage() {
         <p className="text-sm text-muted-foreground">Dữ liệu toàn bộ kỳ · nổi bật T3/2026</p>
       </div>
 
-      {/* Metric cards */}
+      {/* Metric cards — row 1 */}
       {!kpi ? (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-28" />)}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-28" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <MetricCard icon={Banknote}   label="Doanh thu T3/2026"    value={formatVND(kpi.revenue)}     delta={kpi.mom_revenue_pct} />
-          <MetricCard icon={ShoppingCart} label="Đơn hàng T3/2026"  value={formatNum(kpi.orders)}      delta={kpi.mom_orders_pct} />
-          <MetricCard icon={Package}    label="Sản lượng T3/2026"    value={formatNum(kpi.qty) + " chiếc"} />
-          <MetricCard icon={Users}      label="Đại lý hoạt động"     value={formatNum(kpi.active_dealers)} sub={`/ ${formatNum(kpi.dealers)} tổng`} />
-          <MetricCard icon={Percent}    label="DT TB / đại lý"       value={formatVND(kpi.avg_per_dealer)} sub="T3/2026" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard icon={Banknote}     label="Doanh thu T3/2026"   value={formatVND(kpi.revenue)}         delta={kpi.mom_revenue_pct} />
+          <MetricCard icon={ShoppingCart} label="Đơn hàng T3/2026"    value={formatNum(kpi.orders)}          delta={kpi.mom_orders_pct} />
+          <MetricCard icon={Package}      label="Sản lượng T3/2026"   value={formatNum(kpi.qty) + " chiếc"} />
+          <MetricCard icon={Users}        label="Đại lý hoạt động"    value={formatNum(kpi.active_dealers)}  sub={`/ ${formatNum(kpi.dealers)} tổng`} />
+        </div>
+      )}
+      {/* Metric cards — row 2 */}
+      {kpi && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <MetricCard icon={Percent}  label="DT trung bình / đại lý"  value={formatVND(kpi.avg_per_dealer)}  sub="T3/2026" />
+          <MetricCard icon={Banknote} label="Giá bán trung bình"       value={formatVND(kpi.avg_unit_price)}  sub="mỗi chiếc T3/2026" />
+          <MetricCard icon={Package}  label="Dòng hàng TB / đơn"      value={kpi.lines_per_order?.toFixed(1) + " dòng"} sub="T3/2026" />
         </div>
       )}
 
@@ -188,21 +199,23 @@ export default function OverviewPage() {
 
         <Card>
           <CardHeader><CardTitle className="text-sm">Key Insights</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             {insights.length === 0 ? <Skeleton className="h-52" /> : insights.map((ins, i) => (
-              <div key={i} className="rounded-lg bg-accent/40 p-3">
-                <Badge variant="outline" className="mb-1 text-[10px]">{ins.title}</Badge>
-                <p className="text-xs leading-relaxed">{ins.text}</p>
+              <div key={i} className="rounded-lg border border-border/60 p-3 space-y-2">
+                <div className="flex gap-2">
+                  <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-0">Phát hiện</Badge>
+                </div>
+                <p className="text-xs leading-relaxed">{ins.phat_hien}</p>
+                <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{ins.y_nghia}</p>
+                </div>
+                <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{ins.hanh_dong}</p>
+                </div>
               </div>
             ))}
-            {kpi && (
-              <div className="rounded-lg bg-accent/40 p-3">
-                <Badge variant="outline" className="mb-1 text-[10px]">Hành động</Badge>
-                <p className="text-xs leading-relaxed">
-                  Tập trung top 20% đại lý ({formatNum(Math.round(kpi.dealers * 0.2))} đại lý) đang tạo ra {kpi.pareto_top20_pct?.toFixed(0)}% doanh thu. Triển khai chương trình ưu đãi Q2/2026 cho nhóm này.
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

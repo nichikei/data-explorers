@@ -30,8 +30,8 @@ export default function GeographyPage() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch<Province[]>("/api/geography/provinces"),
-      apiFetch<Region[]>("/api/geography/regions"),
+      apiFetch<Province[]>("/api/geography/provinces", []),
+      apiFetch<Region[]>("/api/geography/regions", []),
     ]).then(([p, r]) => { setProvinces(p); setRegions(r); });
   }, []);
 
@@ -205,6 +205,39 @@ export default function GeographyPage() {
           </Card>
         ))}
       </div>
+
+      {/* Insights */}
+      {regions.length > 0 && provinces.length > 0 && (() => {
+        const sorted = [...regions].sort((a, b) => b.revenue - a.revenue);
+        const top = sorted[0];
+        const bot = sorted[sorted.length - 1];
+        const topProv = [...provinces].sort((a, b) => b.revenue - a.revenue)[0];
+        const totalRev = regions.reduce((s, r) => s + r.revenue, 0);
+        return (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Key Insights — Địa lý</CardTitle></CardHeader>
+            <CardContent className="rounded-lg border border-border/60 p-3 space-y-2">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
+              <p className="text-xs leading-relaxed">
+                <b>{top?.region}</b> dẫn đầu với {formatVND(top?.revenue)} ({top?.pct?.toFixed(1)}% tổng doanh thu).{" "}
+                <b>{bot?.region}</b> đóng góp thấp nhất ({bot?.pct?.toFixed(1)}%). Tỉnh/TP mạnh nhất: <b>{topProv?.province_name}</b> ({formatVND(topProv?.revenue)}).
+              </p>
+              <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
+                <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Sự chênh lệch giữa 3 vùng phản ánh mật độ mạng lưới đại lý và sức mua theo vùng — thị trường không đồng đều đòi hỏi chiến lược tiếp cận khác biệt.
+                </p>
+              </div>
+              <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
+                <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Tập trung nguồn lực phát triển đại lý tại {bot?.region} (dư địa lớn nhất). Đồng thời bảo vệ thị phần tại {top?.region} bằng chính sách hỗ trợ đại lý ưu tiên.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

@@ -36,8 +36,8 @@ export default function OperationsPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<Pipeline>("/api/operations/pipeline"),
-      apiFetch<Daily[]>("/api/operations/daily"),
-      apiFetch<ErrorRow[]>("/api/operations/errors"),
+      apiFetch<Daily[]>("/api/operations/daily", []),
+      apiFetch<ErrorRow[]>("/api/operations/errors", []),
     ]).then(([p, d, e]) => { setPipeline(p); setDaily(d); setErrors(e); });
   }, []);
 
@@ -204,6 +204,42 @@ export default function OperationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Insights */}
+      {pipeline && (() => {
+        const successRate = pipeline.success_rate;
+        const failCount = pipeline.stages.find(s => s.status === "FAILED")?.count ?? 0;
+        return (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Key Insights — Vận hành</CardTitle></CardHeader>
+            <CardContent className="rounded-lg border border-border/60 p-3 space-y-2">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
+              <p className="text-xs leading-relaxed">
+                Pipeline T3/2026 xử lý <b>{pipeline.total} email</b>, nhập DB thành công <b>{pipeline.loaded} đơn hàng</b> (tỷ lệ {successRate}%).
+                {failCount > 0
+                  ? ` Có ${failCount} email thất bại cần xử lý thủ công.`
+                  : " Không có lỗi nghiêm trọng — hệ thống hoạt động ổn định."}
+              </p>
+              <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
+                <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {successRate >= 98
+                    ? "Tỷ lệ thành công trên 98% cho thấy pipeline đang ổn định và đáng tin cậy để xử lý dữ liệu tháng tiếp theo."
+                    : "Tỷ lệ thất bại cần được điều tra — email bị lỗi có thể chứa đơn hàng thực tế chưa được ghi nhận vào doanh thu."}
+                </p>
+              </div>
+              <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
+                <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {failCount > 0
+                    ? `Xử lý thủ công ${failCount} email lỗi trong bảng bên dưới. Ưu tiên email có giá trị đơn hàng cao. Kiểm tra lại định dạng PDF đính kèm.`
+                    : "Mở rộng pipeline sang tháng 4/2026. Lập kế hoạch backup định kỳ và monitor log hàng tuần để phát hiện lỗi sớm."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

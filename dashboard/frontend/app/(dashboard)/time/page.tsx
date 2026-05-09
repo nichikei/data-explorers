@@ -26,10 +26,10 @@ export default function TimePage() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch<Monthly[]>("/api/time/monthly"),
-      apiFetch<YoY[]>("/api/time/yoy_q1"),
-      apiFetch<Heatmap[]>("/api/time/heatmap"),
-      apiFetch<Waterfall[]>("/api/time/mom_waterfall"),
+      apiFetch<Monthly[]>("/api/time/monthly", []),
+      apiFetch<YoY[]>("/api/time/yoy_q1", []),
+      apiFetch<Heatmap[]>("/api/time/heatmap", []),
+      apiFetch<Waterfall[]>("/api/time/mom_waterfall", []),
     ]).then(([m, y, h, w]) => { setMonthly(m); setYoy(y); setHeatmap(h); setWaterfall(w); });
   }, []);
 

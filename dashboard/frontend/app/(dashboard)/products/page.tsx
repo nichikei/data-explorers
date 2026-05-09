@@ -36,10 +36,10 @@ export default function ProductsPage() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch<Hierarchy[]>("/api/products/hierarchy"),
-      apiFetch<BCG[]>("/api/products/bcg"),
-      apiFetch<ColorData[]>("/api/products/colors"),
-      apiFetch<TopSku[]>("/api/products/top_sku?limit=20&order=top"),
+      apiFetch<Hierarchy[]>("/api/products/hierarchy", []),
+      apiFetch<BCG[]>("/api/products/bcg", []),
+      apiFetch<ColorData[]>("/api/products/colors", []),
+      apiFetch<TopSku[]>("/api/products/top_sku?limit=20&order=top", []),
     ]).then(([h, b, c, s]) => { setHierarchy(h); setBcg(b); setColors(c); setTopSku(s); });
   }, []);
 
@@ -254,6 +254,56 @@ export default function ProductsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Insights */}
+      {bcg.length > 0 && topSku.length > 0 && (() => {
+        const stars = bcg.filter(b => b.quadrant === "Stars");
+        const dogs  = bcg.filter(b => b.quadrant === "Dogs");
+        const top1  = topSku[0];
+        return (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Key Insights — Sản phẩm</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border/60 p-3 space-y-2">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
+                <p className="text-xs leading-relaxed">
+                  BCG Matrix xác định <b>{stars.length} nhóm Stars</b> ({stars.map(s => s.group_name).join(", ")}) và <b>{dogs.length} nhóm Dogs</b> ({dogs.map(d => d.group_name).join(", ")}). SKU bán chạy nhất: <b>{top1?.product_name}</b> ({formatNum(top1?.total_qty)} chiếc).
+                </p>
+                <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Nhóm Stars đang tăng trưởng mạnh và chiếm thị phần lớn — đây là động lực chính của doanh số. Nhóm Dogs cần đánh giá lại để tránh phân tán nguồn lực sản xuất.
+                  </p>
+                </div>
+                <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Tăng cường đặt hàng các SKU Stars cho Q2/2026. Xem xét giảm SKU Dogs hoặc gộp danh mục để tối ưu chi phí quản lý tồn kho.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3 space-y-2">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
+                <p className="text-xs leading-relaxed">
+                  Heatmap màu sắc cho thấy phân bổ nhu cầu không đều theo dòng xe — một số màu chiếm ưu thế tuyệt đối trong từng phân khúc.
+                </p>
+                <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Màu sắc là yếu tố quyết định lựa chọn của người tiêu dùng cuối — đại lý thường đặt theo xu hướng màu mùa hè/xuân.
+                  </p>
+                </div>
+                <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
+                  <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Ưu tiên sản xuất các SKU màu bán chạy cho Q2/2026. Cảnh báo tồn kho cho các màu ít được đặt ở từng dòng xe.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

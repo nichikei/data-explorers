@@ -28,10 +28,10 @@ export default function CustomersPage() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch<RFM[]>("/api/customers/rfm"),
-      apiFetch<Churn[]>("/api/customers/churn"),
-      apiFetch<TopDealer[]>("/api/customers/top?limit=10"),
-      apiFetch<Pareto[]>("/api/customers/pareto"),
+      apiFetch<RFM[]>("/api/customers/rfm", []),
+      apiFetch<Churn[]>("/api/customers/churn", []),
+      apiFetch<TopDealer[]>("/api/customers/top?limit=10", []),
+      apiFetch<Pareto[]>("/api/customers/pareto", []),
     ]).then(([r, c, t, p]) => { setRfm(r); setChurn(c); setTop(t); setPareto(p); });
   }, []);
 

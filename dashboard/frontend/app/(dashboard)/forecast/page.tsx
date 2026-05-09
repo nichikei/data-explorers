@@ -10,16 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AreaChart, Area, BarChart, Bar, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, Cell, ZAxis, ReferenceLine,
+  Legend, Cell, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, ErrorBar,
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, Users, Package, Minus } from "lucide-react";
 
 /* ── Types ── */
+interface SkuQ2 { product_code: string; product_name: string; color: string; line_name: string; group_name: string; total_qty_q1: number; total_revenue_q1: number; q2_revenue_proj: number; }
 interface RevenueForecast {
   historical: { group: string; ds: string; revenue: number }[];
   forecast:   { group: string; ds: string; yhat: number; lower: number; upper: number }[];
   total_q2:   Record<string, number>;
   backtest:   Record<string, { actual: number; predicted: number; mape_pct: number }>;
+  top_skus_q2: SkuQ2[];
 }
 interface ColorTrend {
   color: string; qty_q1_2025: number; qty_q1_2026: number;
@@ -37,6 +39,7 @@ interface ChurnDealer {
   customer_code: string; customer_name: string; province_name: string; region: string;
   recency_days: number; frequency: number; monetary: number;
   freq_90d: number; churn_proba: number; churn_segment: string;
+  prob_order_30d: number; priority_score: number;
 }
 interface ChurnForecast {
   dealers: ChurnDealer[];
@@ -127,7 +130,12 @@ function RevenueTab({ data }: { data: RevenueForecast | null }) {
 
       {/* Timeline chart */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Xu hướng & Dự báo doanh thu (Jan/2025 → Jun/2026)</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            Xu hướng & Dự báo doanh thu (Jan/2025 → Jun/2026)
+            <span className="text-[10px] text-muted-foreground font-normal">Vùng cam = dự báo Q2 (khoảng tin cậy ±20%)</span>
+          </CardTitle>
+        </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={areaData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -136,7 +144,8 @@ function RevenueTab({ data }: { data: RevenueForecast | null }) {
               <YAxis tickFormatter={v => `${(Number(v) / 1e9).toFixed(0)}tỷ`} tick={{ fontSize: 10 }} width={40} />
               <Tooltip formatter={(v) => formatVND(Number(v ?? 0))} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-              {/* Forecast region marker */}
+              {/* Forecast confidence zone */}
+              <ReferenceArea x1="2026-04" x2="2026-06" fill="#f59e0b" fillOpacity={0.08} strokeOpacity={0} />
               <ReferenceLine x="2026-04" stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "Dự báo →", fontSize: 9, fill: "#f59e0b" }} />
               {groups.map(g => (
                 <Area key={g} type="monotone" dataKey={g}
@@ -150,16 +159,50 @@ function RevenueTab({ data }: { data: RevenueForecast | null }) {
         </CardContent>
       </Card>
 
-      {/* Q2 breakdown by month */}
+      {/* Q2 confidence interval chart */}
+      {(() => {
+        const q2CI = Q2_MONTHS.map(month => {
+          const rows = data.forecast.filter(r => r.ds === month);
+          const yhat = rows.reduce((s, r) => s + r.yhat, 0);
+          const lower = rows.reduce((s, r) => s + r.lower, 0);
+          const upper = rows.reduce((s, r) => s + r.upper, 0);
+          return { month: Q2_LABELS[month], yhat: Math.round(yhat / 1e9 * 10) / 10, lower: Math.round(lower / 1e9 * 10) / 10, upper: Math.round(upper / 1e9 * 10) / 10 };
+        });
+        return (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Khoảng tin cậy dự báo Q2/2026 (khoảng ±20%)</CardTitle></CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={160}>
+                <ComposedChart data={q2CI} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={v => `${v}tỷ`} tick={{ fontSize: 10 }} width={40} />
+                  <Tooltip formatter={(v, n) => [`${v}tỷ`, String(n)]} />
+                  <Bar dataKey="yhat" name="Dự báo (tỷ)" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={48}>
+                    <ErrorBar dataKey={(d: { yhat: number; lower: number; upper: number }) => [d.yhat - d.lower, d.upper - d.yhat] as unknown as number} width={8} strokeWidth={2} stroke="#f59e0b" />
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Q2 breakdown by month with CI range */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {Q2_MONTHS.map(month => {
           const rows = data.forecast.filter(r => r.ds === month);
           const total = rows.reduce((s, r) => s + r.yhat, 0);
+          const lower = rows.reduce((s, r) => s + r.lower, 0);
+          const upper = rows.reduce((s, r) => s + r.upper, 0);
           return (
             <Card key={month}>
               <CardHeader><CardTitle className="text-sm">{Q2_LABELS[month]}</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-xl font-bold">{formatVND(total)}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Khoảng tin cậy: [{formatVND(lower)} – {formatVND(upper)}]
+                </p>
                 <div className="space-y-1">
                   {rows.sort((a, b) => b.yhat - a.yhat).map(r => (
                     <div key={r.group} className="flex justify-between text-xs">
@@ -205,10 +248,41 @@ function RevenueTab({ data }: { data: RevenueForecast | null }) {
         </CardContent>
       </Card>
 
+      {/* Top 20 SKU Q2 projection */}
+      {data.top_skus_q2 && data.top_skus_q2.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Top 20 SKU dự kiến bán chạy Q2/2026 (chiếu từ tỷ trọng Q1/2026)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-auto max-h-64">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-border">
+                  {["#", "Sản phẩm", "Màu", "Nhóm SP", "SL Q1/2026", "DT Q1/2026", "Dự báo Q2 (tỷ)"].map(h => (
+                    <th key={h} className="text-left pb-2 text-muted-foreground font-medium pr-3">{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {data.top_skus_q2.map((s, i) => (
+                    <tr key={s.product_code} className="border-b border-border/40">
+                      <td className="py-1.5 pr-3 text-muted-foreground">{i + 1}</td>
+                      <td className="py-1.5 pr-3 max-w-40 truncate font-medium">{s.product_name}</td>
+                      <td className="py-1.5 pr-3"><Badge className="text-[9px] bg-accent">{s.color}</Badge></td>
+                      <td className="py-1.5 pr-3 text-muted-foreground truncate max-w-25">{s.group_name}</td>
+                      <td className="py-1.5 pr-3">{formatNum(s.total_qty_q1)}</td>
+                      <td className="py-1.5 pr-3">{formatVND(s.total_revenue_q1)}</td>
+                      <td className="py-1.5 font-bold text-primary">{s.q2_revenue_proj}tỷ</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Insight */}
       <InsightBox
         phat_hien={`Dự báo tổng doanh thu Q2/2026 đạt ${formatVND(totalQ2 * 1e9)} — phân bổ đều qua 3 tháng (${Q2_MONTHS.map(m => `${Q2_LABELS[m]}: ${formatVND(data.forecast.filter(r => r.ds === m).reduce((s, r) => s + r.yhat, 0))}`).join(", ")}).`}
-        y_nghia="Mô hình Prophet được train trên 15 tháng lịch sử (Jan/2025–Mar/2026), phát hiện xu hướng tăng trưởng và tính mùa vụ của từng nhóm sản phẩm."
+        y_nghia="Mô hình YoY-adjusted (dampened 50%) được train trên 6 tháng lịch sử (Q1/2025 và Q1/2026), áp dụng tốc độ tăng trưởng YoY trung vị và phân phối mùa vụ Q2 (T4: 95%, T5: 105%, T6: 100% so với baseline)."
         hanh_dong="Sử dụng dự báo này để lập kế hoạch sản xuất và đặt hàng Q2: ưu tiên tăng tồn kho nhóm có dự báo cao, thương lượng chiết khấu với đại lý lớn trong tháng 4."
       />
     </div>
@@ -220,6 +294,21 @@ function RevenueTab({ data }: { data: RevenueForecast | null }) {
 ══════════════════════════════════════════════════════════════ */
 function ColorTab({ data }: { data: ColorForecast | null }) {
   if (!data) return <Skeleton className="h-96" />;
+
+  function exportSlowMovingCSV() {
+    const rows = [
+      ["Mã SP", "Tên sản phẩm", "Màu", "Nhóm SP", "Tổng SL", "Ngày không có đơn"],
+      ...data.slow_moving_skus.map(s => [
+        s.product_code, s.product_name, s.color, s.group_name, s.total_qty, s.days_no_sale,
+      ]),
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "slow_moving_skus.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const top12Mix = data.q2_color_mix.slice(0, 12);
   const top12Trends = data.color_trends.slice(0, 12);
@@ -321,6 +410,10 @@ function ColorTab({ data }: { data: ColorForecast | null }) {
           <CardTitle className="text-sm flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             SKU tồn kho rủi ro — Ít bán hoặc không có đơn gần đây
+            <button onClick={exportSlowMovingCSV}
+              className="ml-auto text-[10px] px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors">
+              Tải CSV
+            </button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -385,10 +478,10 @@ function ChurnTab({ data }: { data: ChurnForecast | null }) {
 
   function exportCSV() {
     const rows = [
-      ["Mã KH", "Tên đại lý", "Tỉnh/TP", "Vùng", "Ngày không đặt", "Tần suất", "Xác suất churn %", "Phân loại"],
+      ["Mã KH", "Tên đại lý", "Tỉnh/TP", "Vùng", "Ngày không đặt", "Tần suất", "Churn %", "XS đặt hàng 30d %", "Điểm ưu tiên", "Phân loại"],
       ...highRisk.map(d => [
         d.customer_code, d.customer_name, d.province_name, d.region,
-        d.recency_days, d.frequency, d.churn_proba, d.churn_segment,
+        d.recency_days, d.frequency, d.churn_proba, d.prob_order_30d, d.priority_score, d.churn_segment,
       ]),
     ];
     const csv = rows.map(r => r.join(",")).join("\n");
@@ -500,25 +593,28 @@ function ChurnTab({ data }: { data: ChurnForecast | null }) {
           <div className="overflow-auto max-h-64">
             <table className="w-full text-xs">
               <thead><tr className="border-b border-border">
-                {["Đại lý", "Tỉnh/TP", "Ngày không đặt", "Tần suất", "Churn %", "Phân loại"].map(h => (
+                {["Đại lý", "Tỉnh/TP", "Ngày không đặt", "Churn %", "XS đặt hàng 30d", "Ưu tiên", "Phân loại"].map(h => (
                   <th key={h} className="text-left pb-2 text-muted-foreground font-medium pr-3">{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {highRisk.slice(0, 50).map(d => (
                   <tr key={d.customer_code} className="border-b border-border/40">
-                    <td className="py-1.5 pr-3 max-w-[160px]">
+                    <td className="py-1.5 pr-3 max-w-40">
                       <p className="font-medium truncate">{d.customer_name}</p>
                       <p className="text-[9px] text-muted-foreground">{d.customer_code}</p>
                     </td>
                     <td className="py-1.5 pr-3 text-muted-foreground">{d.province_name}</td>
                     <td className="py-1.5 pr-3">
                       <Badge className={`text-[9px] ${d.recency_days > 90 ? "bg-red-500/20 text-red-400" : "bg-amber-500/20 text-amber-400"}`}>
-                        {d.recency_days} ngày
+                        {d.recency_days}d
                       </Badge>
                     </td>
-                    <td className="py-1.5 pr-3">{d.frequency} đơn</td>
                     <td className="py-1.5 pr-3 font-bold" style={{ color: "#ef4444" }}>{d.churn_proba}%</td>
+                    <td className="py-1.5 pr-3 text-emerald-400 font-medium">{d.prob_order_30d}%</td>
+                    <td className="py-1.5 pr-3">
+                      <span className="text-xs font-bold text-amber-400">{d.priority_score?.toFixed(0)}</span>
+                    </td>
                     <td className="py-1.5">
                       <Badge className="text-[9px]" style={{ backgroundColor: SEGMENT_COLORS[d.churn_segment] + "33", color: SEGMENT_COLORS[d.churn_segment] }}>
                         {d.churn_segment}

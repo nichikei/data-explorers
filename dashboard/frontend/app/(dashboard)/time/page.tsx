@@ -57,6 +57,18 @@ export default function TimePage() {
   const heatYears = [...new Set(heatmap.map(r => r.fiscal_year))].sort();
   const maxRev = Math.max(...heatmap.map(r => r.revenue));
 
+  // Seasonality index: average revenue per month / overall monthly average
+  const seasonalityIndex = Array.from({ length: 12 }, (_, mi) => {
+    const monthData = heatmap.filter(r => r.fiscal_month === mi + 1);
+    const avg = monthData.length > 0 ? monthData.reduce((s, r) => s + r.revenue, 0) / monthData.length : 0;
+    return { month: MONTH_LABELS[mi + 1], avg };
+  });
+  const overallAvg = seasonalityIndex.reduce((s, r) => s + r.avg, 0) / (seasonalityIndex.filter(r => r.avg > 0).length || 1);
+  const seasonIdx = seasonalityIndex.map(r => ({
+    month: r.month,
+    index: r.avg > 0 ? Math.round((r.avg / overallAvg) * 100) : null,
+  }));
+
   const totalYoy = yoy.reduce((acc, r) => acc + (r.q1_2026 ?? 0), 0);
   const totalYoy25 = yoy.reduce((acc, r) => acc + (r.q1_2025 ?? 0), 0);
   const overallGrowth = totalYoy25 > 0 ? ((totalYoy - totalYoy25) / totalYoy25 * 100).toFixed(1) : "—";
@@ -160,6 +172,33 @@ export default function TimePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Seasonality index */}
+      {seasonIdx.some(r => r.index !== null) && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Chỉ số mùa vụ theo tháng (Trung bình các năm = 100)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex gap-1 items-end h-20 mb-2">
+              {seasonIdx.map(({ month, index }) => (
+                <div key={month} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div className="text-[8px] font-medium" style={{ color: index !== null && index > 110 ? "#10b981" : index !== null && index < 90 ? "#ef4444" : "#6b7280" }}>
+                    {index ?? "—"}
+                  </div>
+                  <div className="w-full rounded-sm transition-all"
+                    style={{
+                      height: index ? `${Math.max(4, (index / 150) * 64)}px` : "4px",
+                      backgroundColor: index !== null && index > 110 ? "#10b981" : index !== null && index < 90 ? "#ef4444" : "#6b7280",
+                      opacity: index ? 0.8 : 0.2,
+                    }}
+                  />
+                  <span className="text-[8px] text-muted-foreground">{month}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">Index &gt; 100 = tháng cao hơn trung bình · &lt; 100 = thấp hơn · Dữ liệu từ {heatYears.length} năm quan sát</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* MoM Waterfall */}
       <Card>

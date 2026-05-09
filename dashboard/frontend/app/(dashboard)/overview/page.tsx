@@ -81,6 +81,8 @@ export default function OverviewPage() {
     .filter(Boolean)
     .map(x => ({ name: FUNNEL_LABELS[x!.status] ?? x!.status, value: x!.count, fill: FUNNEL_COLORS[x!.status] ?? "#6b7280" }));
 
+  const topGroup = groups.length > 0 ? [...groups].sort((a, b) => b.revenue - a.revenue)[0] : null;
+
   const insights = kpi ? [
     {
       phat_hien: `Doanh thu T3/2026 đạt ${formatVND(kpi.revenue)} — tăng ${pct(kpi.mom_revenue_pct)} so với T2/2026 và ${pct(kpi.yoy_revenue_pct)} so với T3/2025.`,
@@ -96,6 +98,18 @@ export default function OverviewPage() {
       phat_hien: `Top 20% đại lý (≈${formatNum(Math.round(kpi.dealers * 0.2))} đại lý) tạo ra ${kpi.pareto_top20_pct?.toFixed(1)}% tổng doanh thu — Pareto 80/20 đang hoạt động rõ rệt.`,
       y_nghia: "Mức độ tập trung doanh thu cao đồng nghĩa rủi ro lớn nếu mất bất kỳ đại lý trọng yếu nào — cần chương trình giữ chân chuyên biệt.",
       hanh_dong: `Lập danh sách VIP cho nhóm top 20% (${formatNum(Math.round(kpi.dealers * 0.2))} đại lý), phân công account manager và ưu tiên hạn mức tín dụng trong Q2/2026.`,
+    },
+    {
+      phat_hien: topGroup
+        ? `Nhóm "${topGroup.group_name}" chiếm ${topGroup.pct?.toFixed(1)}% tổng doanh thu T3/2026 (${formatVND(topGroup.revenue)}) — nhóm sản phẩm chi phối doanh số toàn danh mục.`
+        : `Cơ cấu sản phẩm tập trung — 1 nhóm SP chiếm tỷ trọng vượt trội trong tổng doanh thu T3/2026.`,
+      y_nghia: "Mức độ phụ thuộc cao vào một nhóm SP tạo rủi ro doanh thu nếu nhu cầu phân khúc đó sụt giảm hoặc xuất hiện đối thủ cạnh tranh mạnh.",
+      hanh_dong: "Đẩy mạnh bán chéo (cross-sell) nhóm xe trẻ em và xe thể thao trong Q2/2026 để cân bằng cơ cấu danh mục và giảm rủi ro tập trung.",
+    },
+    {
+      phat_hien: `Giá bán trung bình đạt ${formatVND(kpi.avg_unit_price)}/chiếc với ${kpi.lines_per_order?.toFixed(1)} dòng hàng/đơn. DT trung bình mỗi đại lý hoạt động: ${formatVND(kpi.avg_per_dealer)}.`,
+      y_nghia: "Số dòng hàng/đơn phản ánh mức độ đa dạng hóa đặt hàng của đại lý — thấp hơn 10 dòng/đơn cho thấy còn dư địa tăng giá trị đơn hàng trung bình (AOV).",
+      hanh_dong: "Triển khai chương trình bundle Q2: đại lý đặt ≥10 dòng/đơn nhận chiết khấu thêm 1–2%. Mục tiêu tăng AOV lên 15% mà không cần tăng số đơn hàng.",
     },
   ] : [];
 

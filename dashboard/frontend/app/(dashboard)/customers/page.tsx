@@ -87,8 +87,8 @@ export default function CustomersPage() {
                       );
                     }}
                   />
-                  <Scatter data={rfm.slice(0, 500)}>
-                    {rfm.slice(0, 500).map((d, i) => (
+                  <Scatter data={rfm}>
+                    {rfm.map((d, i) => (
                       <Cell key={i} fill={RFM_COLORS[d.segment] ?? "#6b7280"} fillOpacity={0.7} />
                     ))}
                   </Scatter>

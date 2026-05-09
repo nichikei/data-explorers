@@ -234,11 +234,32 @@ def train_revenue_forecast() -> dict:
             })
             total_q2[grp] = round(total_q2.get(grp, 0.0) + yhat / 1e9, 2)
 
+    # ── Top 20 SKU Q2 projection ──
+    df_top_sku = query(TOP_SKU_SQL)
+    q1_total_rev = float(
+        df_total[df_total["ds"].dt.strftime("%Y-%m").isin(["2026-01", "2026-02", "2026-03"])]["revenue"].sum()
+    )
+    q2_total_rev = float(fc_seasonal.sum())
+    top_skus_q2 = []
+    for _, row in df_top_sku.iterrows():
+        sku_share = float(row["total_revenue"]) / max(q1_total_rev, 1)
+        top_skus_q2.append({
+            "product_code": str(row["product_code"]),
+            "product_name": str(row["product_name"]),
+            "color": str(row["color"]),
+            "line_name": str(row["line_name"]),
+            "group_name": str(row["group_name"]),
+            "total_qty_q1": float(row["total_qty"]),
+            "total_revenue_q1": float(row["total_revenue"]),
+            "q2_revenue_proj": round(sku_share * q2_total_rev / 1e9, 2),
+        })
+
     return {
         "historical": historical,
         "forecast": forecasts,
         "total_q2": total_q2,
         "backtest": backtest,
+        "top_skus_q2": top_skus_q2,
     }
 
 

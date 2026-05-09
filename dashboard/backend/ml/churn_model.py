@@ -59,7 +59,7 @@ def train() -> tuple[Pipeline, pd.DataFrame, dict]:
 
 
 def get_churn_results(df: pd.DataFrame) -> list[dict]:
-    """Convert trained df to API-friendly records, sorted by risk."""
+    """Convert trained df to API-friendly records, sorted by priority score."""
     cols = [
         "customer_code", "customer_name", "province_name", "region",
         "recency_days", "frequency", "monetary",
@@ -68,5 +68,10 @@ def get_churn_results(df: pd.DataFrame) -> list[dict]:
     result = df[cols].copy()
     result["churn_proba"] = result["churn_proba"].astype(float)
     result["churn_segment"] = result["churn_segment"].astype(str)
-    result = result.sort_values("churn_proba", ascending=False)
+    # Probability of ordering in next 30 days (complement of churn)
+    result["prob_order_30d"] = (100 - result["churn_proba"]).round(1)
+    # Priority = high LTV × high churn risk → most valuable dealers to save first
+    monetary_pct = result["monetary"].rank(pct=True) * 100
+    result["priority_score"] = (monetary_pct * result["churn_proba"] / 100).round(1)
+    result = result.sort_values("priority_score", ascending=False)
     return result.to_dict(orient="records")

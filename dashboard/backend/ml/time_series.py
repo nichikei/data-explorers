@@ -18,11 +18,12 @@ warnings.filterwarnings("ignore")
 MONTHLY_SQL = """
     SELECT
         DATE_TRUNC('month', order_date)::date AS ds,
-        COALESCE(group_name, 'Chưa phân loại') AS group_name,
+        group_name,
         group_code,
         SUM(line_total)  AS revenue,
         SUM(quantity)    AS quantity
     FROM fact_sales
+    WHERE group_name IS NOT NULL
     GROUP BY DATE_TRUNC('month', order_date), group_name, group_code
     ORDER BY ds
 """

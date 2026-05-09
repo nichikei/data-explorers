@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, TrendingUp, Bike, Users, Map, Settings2, BarChart3,
+  LayoutDashboard, TrendingUp, Bike, Users, Map, Settings2, BarChart3, BrainCircuit,
 } from "lucide-react";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/customers",  label: "Đại lý",               icon: Users },
   { href: "/geography",  label: "Địa lý",               icon: Map },
   { href: "/operations", label: "Vận hành",             icon: Settings2 },
+  { href: "/forecast",   label: "Dự báo Q2/2026",       icon: BrainCircuit },
 ];
 
 export default function Sidebar() {

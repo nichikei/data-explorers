@@ -40,3 +40,8 @@ csv/
 
 # ── Claude Code internal ──────────────────────────────────────
 .claude/
+
+# ── Phase B — Dashboard frontend ──────────────────────────────
+dashboard/frontend/node_modules/
+dashboard/frontend/.next/
+dashboard/frontend/.env.local

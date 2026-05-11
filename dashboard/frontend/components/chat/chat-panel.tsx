@@ -109,7 +109,7 @@ export default function ChatPanel() {
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <Bot className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">Hỏi dữ liệu</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">Claude Haiku</span>
+            <span className="ml-auto text-[10px] text-muted-foreground">Gemini Flash</span>
           </div>
 
           {/* Messages */}

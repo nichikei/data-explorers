@@ -298,7 +298,7 @@ function ColorTab({ data }: { data: ColorForecast | null }) {
   function exportSlowMovingCSV() {
     const rows = [
       ["Mã SP", "Tên sản phẩm", "Màu", "Nhóm SP", "Tổng SL", "Ngày không có đơn"],
-      ...data.slow_moving_skus.map(s => [
+      ...data!.slow_moving_skus.map(s => [
         s.product_code, s.product_name, s.color, s.group_name, s.total_qty, s.days_no_sale,
       ]),
     ];

@@ -229,26 +229,85 @@ export default function TimePage() {
         </CardContent>
       </Card>
 
-      {/* Insight */}
-      <Card className="bg-accent/20">
-        <CardContent className="pt-4 space-y-2">
-          <p className="text-xs font-medium">Insight phân tích thời gian</p>
-          <div className="grid grid-cols-3 gap-3 text-xs text-muted-foreground">
-            <div className="rounded-lg bg-card p-3">
-              <p className="font-medium text-foreground mb-1">Phát hiện</p>
-              Q1/2026 tổng tăng <strong className="text-emerald-500">{overallGrowth}%</strong> so với Q1/2025, thể hiện đà tăng trưởng tích cực đầu năm.
-            </div>
-            <div className="rounded-lg bg-card p-3">
-              <p className="font-medium text-foreground mb-1">Ý nghĩa</p>
-              T3 thường là tháng cao điểm (sau Tết Nguyên Đán), cần đảm bảo tồn kho và nhân lực đủ đáp ứng.
-            </div>
-            <div className="rounded-lg bg-card p-3">
-              <p className="font-medium text-foreground mb-1">Hành động</p>
-              Chuẩn bị kế hoạch sản xuất Q2/2026 dựa trên pattern mùa vụ Q2/2025, tập trung nhóm xe phổ thông.
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Key Insights */}
+      {yoy.length > 0 && (() => {
+        const yoySorted = [...yoy].sort((a, b) => (b.yoy_pct ?? 0) - (a.yoy_pct ?? 0));
+        const bestGroup = yoySorted[0];
+        const worstGroup = yoySorted[yoySorted.length - 1];
+        const topGroupByRev = [...yoy].sort((a, b) => (b.q1_2026 ?? 0) - (a.q1_2026 ?? 0))[0];
+        const topGroupShare = totalYoy > 0 && topGroupByRev ? Math.round((topGroupByRev.q1_2026 ?? 0) / totalYoy * 100) : 0;
+        const peakSeason = seasonIdx.reduce((a, b) => ((a.index ?? 0) >= (b.index ?? 0) ? a : b), { month: "—", index: 0 });
+        const lowSeason = seasonIdx.filter(s => s.index != null).reduce((a, b) => ((a.index ?? 999) <= (b.index ?? 999) ? a : b), { month: "—", index: 999 });
+        const biggestGain = waterfall.filter(w => (w.mom_change ?? 0) > 0).reduce((a, b) => ((a.mom_change ?? 0) > (b.mom_change ?? 0) ? a : b), { label: "—", mom_change: 0, revenue: 0 } as Waterfall);
+        const biggestDrop = waterfall.filter(w => (w.mom_change ?? 0) < 0).reduce((a, b) => ((a.mom_change ?? 0) < (b.mom_change ?? 0) ? a : b), { label: "—", mom_change: 0, revenue: 0 } as Waterfall);
+        const peakBias = (peakSeason.index ?? 0) - (lowSeason.index ?? 0);
+
+        const insights = [
+          {
+            num: 1, title: "Tăng trưởng YoY Q1/2026",
+            find: `Tổng doanh thu Q1/2026 tăng ${overallGrowth}% so với Q1/2025. Nhóm bứt phá nhất: ${bestGroup?.group_name} (+${bestGroup?.yoy_pct?.toFixed(1)}%). Nhóm chậm nhất: ${worstGroup?.group_name} (${(worstGroup?.yoy_pct ?? 0) >= 0 ? "+" : ""}${worstGroup?.yoy_pct?.toFixed(1)}%).`,
+            meaning: "Mức tăng trưởng dương xác nhận đà phục hồi hậu Tết. Phân hóa giữa các nhóm phản ánh xu hướng tiêu dùng: đại lý đang chuyển dịch khẩu vị sang sản phẩm giá trị cao hơn.",
+            action: `Tăng quota sản xuất nhóm ${bestGroup?.group_name} thêm 15-20% cho Q2/2026. Thiết kế chương trình kích cầu riêng (combo giảm giá + giao hàng ưu tiên) cho nhóm ${worstGroup?.group_name}.`,
+          },
+          {
+            num: 2, title: "Đỉnh & đáy mùa vụ",
+            find: `Chỉ số mùa vụ đạt đỉnh tháng ${peakSeason.month} (index ${peakSeason.index}) và thấp nhất tháng ${lowSeason.month} (index ${lowSeason.index}). Biên độ chênh lệch ${peakBias} điểm — nhu cầu co giãn mạnh theo mùa.`,
+            meaning: "Biên độ mùa vụ lớn ảnh hưởng trực tiếp đến dòng tiền của đại lý: tháng thấp điểm khó thanh toán đúng hạn, tháng cao điểm có nguy cơ thiếu hàng và mất đơn.",
+            action: `Tăng tồn kho 25-30% trước tháng ${peakSeason.month}. Triển khai chương trình đặt hàng sớm (early-order discount 3%) vào tháng ${lowSeason.month} để san phẳng nhu cầu và cải thiện dòng tiền nhà máy.`,
+          },
+          {
+            num: 3, title: "Biến động MoM lớn nhất",
+            find: biggestGain.label !== "—" && biggestDrop.label !== "—"
+              ? `Tháng tăng đột biến nhất: ${biggestGain.label} (+${formatVND(biggestGain.mom_change ?? 0)} so với tháng trước). Tháng sụt giảm mạnh nhất: ${biggestDrop.label} (${formatVND(biggestDrop.mom_change ?? 0)}). Biên độ dao động phản ánh nhu cầu không ổn định.`
+              : "Dữ liệu waterfall đang xử lý.",
+            meaning: "Biến động MoM lớn gây khó dự báo ngắn hạn và buộc tăng chi phí tồn kho buffer. Tháng sụt giảm đột ngột cần điều tra nguyên nhân: thiếu hàng, mất đại lý chủ chốt, hay yếu tố thị trường.",
+            action: "Thiết lập cảnh báo tự động khi doanh thu tháng giảm >15% so với tháng trước. Yêu cầu báo cáo nguyên nhân từ đội kinh doanh trong 5 ngày làm việc kể từ khi có dữ liệu tháng.",
+          },
+          {
+            num: 4, title: "Tập trung doanh thu theo nhóm",
+            find: topGroupByRev
+              ? `Nhóm dẫn đầu "${topGroupByRev.group_name}" chiếm ${topGroupShare}% tổng DT Q1/2026. Với chỉ ${yoy.length} nhóm sản phẩm, cơ cấu tập trung cao tạo rủi ro: một sự cố chuỗi cung ứng ở nhóm chính ảnh hưởng toàn bộ doanh thu.`
+              : "Đang tải dữ liệu.",
+            meaning: "Danh mục phụ thuộc vào 1-2 nhóm lớn: khi nguồn nguyên liệu hoặc năng lực sản xuất nhóm đó bị giới hạn, đại lý sẽ chuyển sang nhà cung cấp thay thế và doanh nghiệp mất thị phần lâu dài.",
+            action: "Đặt mục tiêu cân bằng danh mục: không nhóm nào chiếm quá 45% doanh thu. Phát triển kế hoạch đầu tư vào nhóm Question Marks để giảm thiểu rủi ro tập trung trong 12 tháng tới.",
+          },
+          {
+            num: 5, title: "Tín hiệu xu hướng dài hạn",
+            find: `Chuỗi dữ liệu liên tục từ ${heatYears[0]} đến ${heatYears[heatYears.length - 1]} (${periods.length} kỳ) cho thấy xu hướng tăng trưởng dài hạn rõ ràng. T3/2026 đã hoàn thành nhập liệu tự động qua pipeline email-PDF — cơ sở dữ liệu đủ sâu để xây dựng mô hình dự báo tin cậy.`,
+            meaning: "Chuỗi 15+ tháng liên tục với đầy đủ dữ liệu là điều kiện tiên quyết để mô hình Prophet/SARIMA đạt độ chính xác cao. Xu hướng tăng dài hạn là luận điểm mạnh để thuyết phục đại lý tăng cam kết đặt hàng.",
+            action: "Huấn luyện mô hình dự báo với toàn bộ lịch sử 2025-Q1/2026, mục tiêu MAPE <15%. Chia sẻ bản tóm tắt xu hướng tăng trưởng này với top 20 đại lý trong buổi họp Q2 để tăng niềm tin và size of order.",
+          },
+        ];
+
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Key Insights — Phân tích thời gian
+                <Badge variant="secondary" className="ml-2 text-[10px]">{insights.length} phát hiện</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {insights.map((ins) => (
+                <div key={ins.num} className="rounded-lg border border-border/60 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">#{ins.num}</span>
+                    <span className="text-xs font-semibold">{ins.title}</span>
+                  </div>
+                  <p className="text-xs leading-relaxed">{ins.find}</p>
+                  <div className="pl-2 border-l-2 border-amber-500/50">
+                    <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.meaning}</p>
+                  </div>
+                  <div className="pl-2 border-l-2 border-emerald-500/50">
+                    <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.action}</p>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

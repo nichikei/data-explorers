@@ -255,51 +255,83 @@ export default function ProductsPage() {
         </Card>
       </div>
 
-      {/* Insights */}
+      {/* Key Insights */}
       {bcg.length > 0 && topSku.length > 0 && (() => {
-        const stars = bcg.filter(b => b.quadrant === "Stars");
-        const dogs  = bcg.filter(b => b.quadrant === "Dogs");
-        const top1  = topSku[0];
+        const stars     = bcg.filter(b => b.quadrant === "Stars");
+        const cashCows  = bcg.filter(b => b.quadrant === "Cash Cows");
+        const dogs      = bcg.filter(b => b.quadrant === "Dogs");
+        const qmarks    = bcg.filter(b => b.quadrant === "Question Marks");
+        const top1      = topSku[0];
+        const top3Rev   = topSku.slice(0, 3).reduce((s, sk) => s + (sk.revenue ?? 0), 0);
+        const totalSkuRev = topSku.reduce((s, sk) => s + (sk.revenue ?? 0), 0);
+        const top3Share = totalSkuRev > 0 ? Math.round(top3Rev / totalSkuRev * 100) : 0;
+        const topColor  = colors.length > 0 ? [...colors].sort((a, b) => b.total_qty - a.total_qty)[0] : null;
+        const topColorShare = topColor && colors.length > 0
+          ? Math.round(topColor.total_qty / colors.reduce((s, c) => s + c.total_qty, 0) * 100) : 0;
+        const cashCowRev = cashCows.reduce((s, c) => s + c.total_rev, 0);
+        const totalBcgRev = bcg.reduce((s, b) => s + b.total_rev, 0);
+        const cashCowShare = totalBcgRev > 0 ? Math.round(cashCowRev / totalBcgRev * 100) : 0;
+
+        const insights = [
+          {
+            num: 1, title: "BCG Matrix — Stars & Dogs",
+            find: `BCG Matrix xác định ${stars.length} nhóm Stars (${stars.map(s => s.group_name).join(", ")}${stars.length === 0 ? "—" : ""}) đang tăng trưởng mạnh, và ${dogs.length} nhóm Dogs (${dogs.map(d => d.group_name).join(", ")}${dogs.length === 0 ? "—" : ""}) tăng trưởng thấp và doanh thu thấp. SKU bán chạy nhất: ${top1?.product_name} (${formatNum(top1?.total_qty)} chiếc).`,
+            meaning: "Stars là nguồn tăng trưởng chính — cần ưu tiên nguồn lực sản xuất và phân phối. Dogs đang tiêu tốn chi phí tồn kho và quản lý mà không tạo ra đủ doanh thu tương xứng.",
+            action: `Tăng 20% công suất sản xuất cho nhóm Stars trong Q2. Đánh giá danh mục Dogs — loại bỏ SKU có dưới 5 đơn/năm, gộp màu sắc tương đồng để giảm chi phí đa dạng hóa.`,
+          },
+          {
+            num: 2, title: "Cash Cows — Nguồn doanh thu ổn định",
+            find: `${cashCows.length} nhóm Cash Cows (${cashCows.map(c => c.group_name).join(", ")}${cashCows.length === 0 ? "—" : ""}) đóng góp ${cashCowShare}% tổng doanh thu với mức tăng trưởng thấp nhưng ổn định. Đây là "sữa" nuôi dưỡng đầu tư cho Stars và Question Marks.`,
+            meaning: "Cash Cows tạo dòng tiền đều đặn và có mạng lưới đại lý trung thành. Rủi ro chính là nhóm này bị đại lý coi là 'hàng cũ' nếu thiếu đổi mới về mẫu mã hoặc màu sắc hàng năm.",
+            action: `Duy trì đầu tư thấp vào nhóm Cash Cows — tập trung vào cải tiến màu sắc mỗi mùa thay vì ra mẫu mới. Sử dụng lợi nhuận từ Cash Cows để tài trợ marketing cho nhóm ${qmarks.map(q => q.group_name).join(", ") || "Question Marks"}.`,
+          },
+          {
+            num: 3, title: "Tập trung SKU — Rủi ro Pareto",
+            find: `Top 3 SKU bán chạy nhất chiếm ${top3Share}% doanh thu của 20 SKU được hiển thị. SKU #1 (${top1?.product_name}) một mình đóng góp ${totalSkuRev > 0 ? Math.round((top1?.revenue ?? 0) / totalSkuRev * 100) : 0}%. Danh mục 247 SKU nhưng thực tế chỉ vài chục SKU tạo ra doanh thu đáng kể.`,
+            meaning: "Tập trung quá cao vào ít SKU tạo rủi ro kép: thiếu hàng một SKU ngôi sao có thể mất 10-15% doanh thu trong tháng, đồng thời tồn kho SKU đuôi dài gây đọng vốn.",
+            action: "Xây dựng buffer tồn kho 6 tuần cho top 10 SKU. Song song rà soát SKU 'đuôi dài' — loại bỏ hoặc discontinue những SKU dưới 10 chiếc/năm để giải phóng vốn lưu động.",
+          },
+          {
+            num: 4, title: "Xu hướng màu sắc — Tín hiệu thị hiếu",
+            find: topColor
+              ? `Màu "${topColor.color}" dẫn đầu về sản lượng (${formatNum(topColor.total_qty)} chiếc, ${topColorShare}% tổng SL). Heatmap màu × dòng xe cho thấy phân bổ nhu cầu không đều — một số màu chiếm ưu thế tuyệt đối trong từng phân khúc.`
+              : "Dữ liệu màu sắc đang tải.",
+            meaning: "Màu sắc là yếu tố quyết định lựa chọn của người tiêu dùng cuối, đặc biệt với xe trẻ em và xe phổ thông. Đại lý đặt hàng theo xu hướng màu mùa xuân-hè (sáng, nổi bật) và thu-đông (trung tính, tối).",
+            action: "Ưu tiên sản xuất top 3 màu bán chạy nhất cho Q2/2026. Thiết lập cảnh báo tồn kho cho màu slow-moving (dưới 50 chiếc/quý) để tránh đọng hàng theo mùa.",
+          },
+          {
+            num: 5, title: "Question Marks — Tiềm năng chưa khai thác",
+            find: `${qmarks.length} nhóm Question Marks (${qmarks.map(q => q.group_name).join(", ")}${qmarks.length === 0 ? "—" : ""}) đang tăng trưởng nhanh nhưng còn thị phần thấp. Đây là nhóm cần quyết định chiến lược: đầu tư mạnh để thành Stars, hay để tự nhiên chuyển thành Dogs.`,
+            meaning: "Question Marks thường hấp dẫn về mặt xu hướng (xe thể thao, xe trẻ em premium) nhưng chưa có đủ mạng lưới đại lý và nhận diện thương hiệu để bứt phá. Thiếu đầu tư đúng lúc sẽ mất cơ hội window.",
+            action: `Chọn 1 nhóm Question Marks để 'bet' trong Q2/2026: đầu tư campaign demo tại 50 đại lý lớn, hỗ trợ trưng bày và chiết khấu giới thiệu 7% trong 3 tháng. Đánh giá lại sau Q2 để quyết định tiếp tục hay dừng.`,
+          },
+        ];
+
         return (
           <Card>
-            <CardHeader><CardTitle className="text-sm">Key Insights — Sản phẩm</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-border/60 p-3 space-y-2">
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
-                <p className="text-xs leading-relaxed">
-                  BCG Matrix xác định <b>{stars.length} nhóm Stars</b> ({stars.map(s => s.group_name).join(", ")}) và <b>{dogs.length} nhóm Dogs</b> ({dogs.map(d => d.group_name).join(", ")}). SKU bán chạy nhất: <b>{top1?.product_name}</b> ({formatNum(top1?.total_qty)} chiếc).
-                </p>
-                <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
-                  <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Nhóm Stars đang tăng trưởng mạnh và chiếm thị phần lớn — đây là động lực chính của doanh số. Nhóm Dogs cần đánh giá lại để tránh phân tán nguồn lực sản xuất.
-                  </p>
+            <CardHeader>
+              <CardTitle className="text-sm">Key Insights — Sản phẩm
+                <Badge variant="secondary" className="ml-2 text-[10px]">{insights.length} phát hiện</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {insights.map((ins) => (
+                <div key={ins.num} className="rounded-lg border border-border/60 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">#{ins.num}</span>
+                    <span className="text-xs font-semibold">{ins.title}</span>
+                  </div>
+                  <p className="text-xs leading-relaxed">{ins.find}</p>
+                  <div className="pl-2 border-l-2 border-amber-500/50">
+                    <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.meaning}</p>
+                  </div>
+                  <div className="pl-2 border-l-2 border-emerald-500/50">
+                    <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.action}</p>
+                  </div>
                 </div>
-                <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
-                  <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Tăng cường đặt hàng các SKU Stars cho Q2/2026. Xem xét giảm SKU Dogs hoặc gộp danh mục để tối ưu chi phí quản lý tồn kho.
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 p-3 space-y-2">
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
-                <p className="text-xs leading-relaxed">
-                  Heatmap màu sắc cho thấy phân bổ nhu cầu không đều theo dòng xe — một số màu chiếm ưu thế tuyệt đối trong từng phân khúc.
-                </p>
-                <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
-                  <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Màu sắc là yếu tố quyết định lựa chọn của người tiêu dùng cuối — đại lý thường đặt theo xu hướng màu mùa hè/xuân.
-                  </p>
-                </div>
-                <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
-                  <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Ưu tiên sản xuất các SKU màu bán chạy cho Q2/2026. Cảnh báo tồn kho cho các màu ít được đặt ở từng dòng xe.
-                  </p>
-                </div>
-              </div>
+              ))}
             </CardContent>
           </Card>
         );

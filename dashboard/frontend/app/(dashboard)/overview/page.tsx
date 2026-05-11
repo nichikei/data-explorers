@@ -17,21 +17,24 @@ interface KPI {
   avg_per_dealer: number; avg_unit_price: number; lines_per_order: number;
   mom_revenue_pct: number; mom_orders_pct: number;
   yoy_revenue_pct: number; active_dealers: number; pareto_top20_pct: number;
+  revenue_q1: number; orders_q1: number;
 }
 interface GroupRevenue { group_name: string; revenue: number; pct: number; }
 interface Sparkline { fiscal_year: number; fiscal_month: number; label: string; revenue: number; }
 interface Pipeline { stages: { status: string; count: number }[]; total: number; loaded: number; success_rate: number; }
 
-function MetricCard({ icon: Icon, label, value, delta, sub }: {
+function MetricCard({ icon: Icon, label, value, delta, sub, target, targetLabel, rawValue }: {
   icon: React.ElementType; label: string; value: string; delta?: number | null; sub?: string;
+  target?: number | null; targetLabel?: string; rawValue?: number | null;
 }) {
   const isPos = delta != null && delta > 0;
   const isNeg = delta != null && delta < 0;
+  const pctOfTarget = target && target > 0 && rawValue != null ? Math.round((rawValue / target) * 100) : null;
   return (
     <Card>
       <CardContent className="pt-5">
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1 mr-2">
             <p className="text-xs text-muted-foreground">{label}</p>
             <p className="text-2xl font-bold">{value}</p>
             {delta != null && (
@@ -41,6 +44,20 @@ function MetricCard({ icon: Icon, label, value, delta, sub }: {
               </p>
             )}
             {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+            {targetLabel && pctOfTarget != null && (
+              <div className="mt-1.5">
+                <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                  <span>{targetLabel}</span>
+                  <span style={{ color: pctOfTarget >= 100 ? "#10b981" : pctOfTarget >= 80 ? "#f59e0b" : "#ef4444" }}>{pctOfTarget}%</span>
+                </div>
+                <div className="h-1 bg-muted rounded-full">
+                  <div className="h-1 rounded-full transition-all" style={{
+                    width: `${Math.min(pctOfTarget, 100)}%`,
+                    backgroundColor: pctOfTarget >= 100 ? "#10b981" : pctOfTarget >= 80 ? "#f59e0b" : "#ef4444",
+                  }} />
+                </div>
+              </div>
+            )}
           </div>
           <div className="rounded-lg bg-primary/10 p-2">
             <Icon className="h-5 w-5 text-primary" />
@@ -127,10 +144,13 @@ export default function OverviewPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard icon={Banknote}     label="Doanh thu T3/2026"   value={formatVND(kpi.revenue)}         delta={kpi.mom_revenue_pct} />
-          <MetricCard icon={ShoppingCart} label="Đơn hàng T3/2026"    value={formatNum(kpi.orders)}          delta={kpi.mom_orders_pct} />
+          <MetricCard icon={Banknote}     label="Doanh thu T3/2026"   value={formatVND(kpi.revenue)}         delta={kpi.mom_revenue_pct}
+            rawValue={kpi.revenue} target={kpi.revenue_q1 > 0 ? kpi.revenue_q1 * 1.1 / 3 : null} targetLabel="vs Target Q2/tháng" />
+          <MetricCard icon={ShoppingCart} label="Đơn hàng T3/2026"    value={formatNum(kpi.orders)}          delta={kpi.mom_orders_pct}
+            rawValue={kpi.orders} target={kpi.orders_q1 > 0 ? kpi.orders_q1 * 1.05 / 3 : null} targetLabel="vs Target Q2/tháng" />
           <MetricCard icon={Package}      label="Sản lượng T3/2026"   value={formatNum(kpi.qty) + " chiếc"} />
-          <MetricCard icon={Users}        label="Đại lý hoạt động"    value={formatNum(kpi.active_dealers)}  sub={`/ ${formatNum(kpi.dealers)} tổng`} />
+          <MetricCard icon={Users}        label="Đại lý hoạt động"    value={formatNum(kpi.active_dealers)}  sub={`/ ${formatNum(kpi.dealers)} tổng`}
+            rawValue={kpi.active_dealers} target={kpi.dealers * 0.85} targetLabel="vs Mục tiêu duy trì 85%" />
         </div>
       )}
       {/* Metric cards — row 2 */}

@@ -2,6 +2,7 @@
 main.py — FastAPI app entry point cho Phase B + C dashboard backend.
 Run: uvicorn main:app --port 8000
 """
+import os
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -69,9 +70,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

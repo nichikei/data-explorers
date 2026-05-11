@@ -26,6 +26,13 @@ def kpi():
             SELECT COUNT(*) AS cnt FROM v_customer_activity
             WHERE days_since_last_order <= 45
         ),
+        q1_2026 AS (
+            SELECT
+                SUM(line_total)           AS revenue_q1,
+                COUNT(DISTINCT so_number) AS orders_q1
+            FROM fact_sales
+            WHERE fiscal_year=2026 AND fiscal_quarter=1
+        ),
         pareto AS (
             WITH rev AS (
                 SELECT customer_code, SUM(line_total) AS r
@@ -54,7 +61,9 @@ def kpi():
             ROUND(100.0 * (cur.orders  - prev.orders)  / NULLIF(prev.orders,  0), 1) AS mom_orders_pct,
             ROUND(100.0 * (cur.revenue - yoy.revenue)  / NULLIF(yoy.revenue,  0), 1) AS yoy_revenue_pct,
             (SELECT cnt  FROM active)  AS active_dealers,
-            (SELECT pct  FROM pareto)  AS pareto_top20_pct
+            (SELECT pct  FROM pareto)  AS pareto_top20_pct,
+            (SELECT revenue_q1 FROM q1_2026) AS revenue_q1,
+            (SELECT orders_q1  FROM q1_2026) AS orders_q1
         FROM cur, prev, yoy
     """)
     if df.empty:

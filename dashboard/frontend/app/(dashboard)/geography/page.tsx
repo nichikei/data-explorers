@@ -16,6 +16,7 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 interface Province { region: string; province_name: string; revenue: number; order_count: number; dealer_count: number; quantity: number; avg_revenue_per_dealer: number; }
 interface Region { region: string; revenue: number; order_count: number; dealer_count: number; quantity: number; pct: number; }
+interface ProvinceGrowth { province_name: string; region: string; rev_q1_2025: number; rev_q1_2026: number; yoy_pct: number; }
 
 const REGION_COLORS: Record<string, string> = {
   "Miền Bắc": "#3b82f6",
@@ -27,12 +28,14 @@ const REGION_COLORS: Record<string, string> = {
 export default function GeographyPage() {
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
+  const [growth, setGrowth] = useState<ProvinceGrowth[]>([]);
 
   useEffect(() => {
     Promise.all([
       apiFetch<Province[]>("/api/geography/provinces", []),
       apiFetch<Region[]>("/api/geography/regions", []),
-    ]).then(([p, r]) => { setProvinces(p); setRegions(r); });
+      apiFetch<ProvinceGrowth[]>("/api/geography/province_growth", []),
+    ]).then(([p, r, g]) => { setProvinces(p); setRegions(r); setGrowth(g); });
   }, []);
 
   // Build Plotly treemap
@@ -171,69 +174,180 @@ export default function GeographyPage() {
         </Card>
       </div>
 
+      {/* YoY growth card */}
+      {growth.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Tăng trưởng địa lý — YoY Q1/2025 → Q1/2026</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <p className="text-xs font-medium text-emerald-400 mb-2">Top 5 tỉnh tăng trưởng nhanh nhất</p>
+                <div className="space-y-1.5">
+                  {growth.filter(g => g.yoy_pct != null && g.yoy_pct > 0).slice(0, 5).map(g => (
+                    <div key={g.province_name} className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-medium">{g.province_name}</span>
+                        <span className="text-[9px] text-muted-foreground ml-1" style={{ color: REGION_COLORS[g.region] }}>{g.region}</span>
+                      </div>
+                      <Badge className="text-[10px] bg-emerald-500/20 text-emerald-400 border-0">
+                        ↑ +{g.yoy_pct?.toFixed(1)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-red-400 mb-2">Top 5 tỉnh sụt giảm mạnh nhất</p>
+                <div className="space-y-1.5">
+                  {[...growth].filter(g => g.yoy_pct != null && g.yoy_pct < 0).sort((a, b) => a.yoy_pct - b.yoy_pct).slice(0, 5).map(g => (
+                    <div key={g.province_name} className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-medium">{g.province_name}</span>
+                        <span className="text-[9px] text-muted-foreground ml-1" style={{ color: REGION_COLORS[g.region] }}>{g.region}</span>
+                      </div>
+                      <Badge className="text-[10px] bg-red-500/20 text-red-400 border-0">
+                        ↓ {g.yoy_pct?.toFixed(1)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Top/Bottom provinces table */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[
           { title: "Top 10 tỉnh/thành doanh thu cao", data: top10 },
           { title: "Bottom 10 tỉnh/thành doanh thu thấp", data: bottom10 },
-        ].map(({ title, data }) => (
-          <Card key={title}>
-            <CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader>
-            <CardContent>
-              <table className="w-full text-xs">
-                <thead><tr className="border-b border-border">
-                  <th className="text-left pb-1 text-muted-foreground font-medium">Tỉnh/TP</th>
-                  <th className="text-right pb-1 text-muted-foreground font-medium">Doanh thu</th>
-                  <th className="text-right pb-1 text-muted-foreground font-medium">ĐL</th>
-                  <th className="text-right pb-1 text-muted-foreground font-medium">Đơn</th>
-                </tr></thead>
-                <tbody>
-                  {data.map((p, i) => (
-                    <tr key={p.province_name} className="border-b border-border/40">
-                      <td className="py-1.5">
-                        <p className="font-medium">{p.province_name}</p>
-                        <p className="text-[9px] text-muted-foreground" style={{ color: REGION_COLORS[p.region] }}>{p.region}</p>
-                      </td>
-                      <td className="py-1.5 text-right">{formatVND(p.revenue)}</td>
-                      <td className="py-1.5 text-right">{p.dealer_count}</td>
-                      <td className="py-1.5 text-right">{p.order_count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        ))}
+        ].map(({ title, data }) => {
+          const growthMap = Object.fromEntries(growth.map(g => [g.province_name, g.yoy_pct]));
+          return (
+            <Card key={title}>
+              <CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader>
+              <CardContent>
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-border">
+                    <th className="text-left pb-1 text-muted-foreground font-medium">Tỉnh/TP</th>
+                    <th className="text-right pb-1 text-muted-foreground font-medium">Doanh thu</th>
+                    <th className="text-right pb-1 text-muted-foreground font-medium">YoY Q1</th>
+                    <th className="text-right pb-1 text-muted-foreground font-medium">ĐL</th>
+                  </tr></thead>
+                  <tbody>
+                    {data.map((p) => {
+                      const yoy = growthMap[p.province_name];
+                      return (
+                        <tr key={p.province_name} className="border-b border-border/40">
+                          <td className="py-1.5">
+                            <p className="font-medium">{p.province_name}</p>
+                            <p className="text-[9px]" style={{ color: REGION_COLORS[p.region] }}>{p.region}</p>
+                          </td>
+                          <td className="py-1.5 text-right">{formatVND(p.revenue)}</td>
+                          <td className="py-1.5 text-right" style={{ color: yoy == null ? undefined : yoy >= 0 ? "#10b981" : "#ef4444" }}>
+                            {yoy != null ? `${yoy >= 0 ? "+" : ""}${yoy.toFixed(1)}%` : "—"}
+                          </td>
+                          <td className="py-1.5 text-right">{p.dealer_count}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Insights */}
+      {/* Key Insights */}
       {regions.length > 0 && provinces.length > 0 && (() => {
-        const sorted = [...regions].sort((a, b) => b.revenue - a.revenue);
-        const top = sorted[0];
-        const bot = sorted[sorted.length - 1];
-        const topProv = [...provinces].sort((a, b) => b.revenue - a.revenue)[0];
-        const totalRev = regions.reduce((s, r) => s + r.revenue, 0);
+        const regionsSorted   = [...regions].filter(r => r.region !== "Không xác định").sort((a, b) => b.revenue - a.revenue);
+        const topRegion       = regionsSorted[0];
+        const botRegion       = regionsSorted[regionsSorted.length - 1];
+        const topProv         = [...provinces].sort((a, b) => b.revenue - a.revenue)[0];
+        const totalRev        = regions.reduce((s, r) => s + r.revenue, 0);
+        const growthPos       = growth.filter(g => g.yoy_pct != null && g.yoy_pct > 0).sort((a, b) => (b.yoy_pct ?? 0) - (a.yoy_pct ?? 0));
+        const growthNeg       = growth.filter(g => g.yoy_pct != null && g.yoy_pct < 0).sort((a, b) => (a.yoy_pct ?? 0) - (b.yoy_pct ?? 0));
+        const regEfficiency   = regionsSorted.map(r => ({ region: r.region, avgPerDealer: r.dealer_count > 0 ? r.revenue / r.dealer_count : 0 }));
+        const highEff         = [...regEfficiency].sort((a, b) => b.avgPerDealer - a.avgPerDealer)[0];
+        const lowEff          = [...regEfficiency].sort((a, b) => a.avgPerDealer - b.avgPerDealer)[0];
+        const topProvByDealer = [...provinces].filter(p => p.dealer_count >= 3).sort((a, b) => b.avg_revenue_per_dealer - a.avg_revenue_per_dealer)[0];
+
+        const insights = [
+          {
+            num: 1, title: "Phân bổ doanh thu 3 vùng miền",
+            find: `${topRegion?.region} dẫn đầu với ${formatVND(topRegion?.revenue)} (${topRegion?.pct?.toFixed(1)}% tổng doanh thu, ${topRegion?.dealer_count} đại lý). ${botRegion?.region} đóng góp thấp nhất (${botRegion?.pct?.toFixed(1)}%, ${botRegion?.dealer_count} đại lý). Tỉnh/TP mạnh nhất: ${topProv?.province_name} (${formatVND(topProv?.revenue)}).`,
+            meaning: "Sự mất cân bằng vùng miền phản ánh mật độ mạng lưới đại lý và sức mua địa phương. Tập trung quá cao vào một vùng tạo rủi ro: thay đổi chính sách địa phương, thiên tai, hay cạnh tranh vùng có thể ảnh hưởng cả doanh nghiệp.",
+            action: `Bảo vệ thị phần ${topRegion?.region} bằng chương trình loyalty đặc biệt. Đồng thời xây dựng kế hoạch 18 tháng để tăng số đại lý tại ${botRegion?.region} thêm 20% — đây là thị trường dư địa lớn nhất.`,
+          },
+          {
+            num: 2, title: "Tỉnh tăng trưởng nhanh — Cơ hội mở rộng",
+            find: growthPos.length > 0
+              ? `Top 3 tỉnh tăng trưởng nhanh nhất (YoY Q1/2025→Q1/2026): ${growthPos.slice(0, 3).map(g => `${g.province_name} (+${g.yoy_pct?.toFixed(0)}%)`).join(", ")}. Tổng ${growthPos.length} tỉnh/TP ghi nhận tăng trưởng dương — tín hiệu thị trường mở rộng cục bộ rõ ràng.`
+              : "Dữ liệu tăng trưởng đang xử lý.",
+            meaning: "Tỉnh tăng trưởng cao thường phản ánh: (1) thị trường địa phương phát triển, (2) đại lý mới gia nhập hoặc đại lý cũ tăng tốc, (3) địa phương chưa bão hòa. Đây là 'cửa sổ cơ hội' 12-18 tháng trước khi cạnh tranh xuất hiện.",
+            action: growthPos.length > 0
+              ? `Cử đội phát triển thị trường khảo sát ${growthPos[0]?.province_name} và ${growthPos[1]?.province_name} trong Q2/2026. Mục tiêu: thêm 2-3 đại lý mới tại mỗi tỉnh, ưu tiên vị trí trung tâm thành phố.`
+              : "Chờ dữ liệu growth.",
+          },
+          {
+            num: 3, title: "Tỉnh sụt giảm — Cảnh báo đỏ",
+            find: growthNeg.length > 0
+              ? `${growthNeg.length} tỉnh/TP ghi nhận doanh thu sụt giảm YoY Q1. Nghiêm trọng nhất: ${growthNeg.slice(0, 3).map(g => `${g.province_name} (${g.yoy_pct?.toFixed(0)}%)`).join(", ")}. Cần điều tra nguyên nhân: mất đại lý, cạnh tranh mới, hay nhu cầu địa phương thay đổi.`
+              : "Không có tỉnh nào sụt giảm đáng kể — tín hiệu tích cực.",
+            meaning: "Sụt giảm YoY hai quý liên tiếp tại một tỉnh thường báo hiệu mất đại lý chủ lực hoặc đối thủ mới xuất hiện. Nếu không can thiệp, tỉnh sụt giảm có thể kéo theo chuyển đổi toàn bộ mạng lưới vùng.",
+            action: growthNeg.length > 0
+              ? `Yêu cầu báo cáo chi tiết từ đội sales về ${growthNeg[0]?.province_name} trong 1 tuần. Kiểm tra: số đại lý còn hoạt động, có đối thủ mới không, đại lý lớn nhất còn đặt hàng không. Quyết định giữ/rút trong vòng 30 ngày.`
+              : "Tiếp tục monitoring.",
+          },
+          {
+            num: 4, title: "Hiệu quả mạng lưới — Doanh thu trên đại lý",
+            find: highEff && lowEff
+              ? `${highEff.region} có doanh thu trung bình/đại lý cao nhất (${formatVND(highEff.avgPerDealer)}/ĐL). ${lowEff.region} thấp nhất (${formatVND(lowEff.avgPerDealer)}/ĐL) — chênh lệch ${(highEff.avgPerDealer / (lowEff.avgPerDealer || 1)).toFixed(1)}x. Tỉnh hiệu quả nhất (≥3 ĐL): ${topProvByDealer?.province_name} (${formatVND(topProvByDealer?.avg_revenue_per_dealer ?? 0)}/ĐL).`
+              : "Đang tính toán hiệu quả mạng lưới.",
+            meaning: "Doanh thu trung bình/đại lý là chỉ số chất lượng mạng lưới, không chỉ số lượng. Vùng có nhiều đại lý nhỏ với doanh thu thấp thực ra kém hiệu quả hơn vùng có ít đại lý lớn. Tối ưu số lượng đại lý quan trọng hơn tăng số lượng.",
+            action: `Với ${lowEff?.region}: không nên thêm đại lý mới trước khi nâng doanh thu trung bình hiện tại lên 20%. Tổ chức training và co-marketing với top 10 đại lý để cải thiện năng suất. Đặt KPI doanh thu/ĐL tối thiểu cho Q3/2026.`,
+          },
+          {
+            num: 5, title: "Vùng trắng — Dư địa thị trường chưa khai thác",
+            find: (() => {
+              const coveredProvinces = new Set(provinces.map(p => p.province_name));
+              const totalProvinces   = 75;
+              const covered          = coveredProvinces.size;
+              const uncovered        = totalProvinces - covered;
+              return `Dữ liệu ghi nhận doanh thu tại ${covered}/75 tỉnh/TP (${Math.round(covered/totalProvinces*100)}% độ phủ). ${uncovered} tỉnh/TP chưa có đại lý hoặc chưa phát sinh đơn hàng — đặc biệt tại ${botRegion?.region} (${botRegion?.dealer_count} đại lý/75 tỉnh toàn quốc).`;
+            })(),
+            meaning: "Vùng trắng (không có đại lý) là cơ hội thị trường rõ ràng nhưng cũng là chi phí: cần đầu tư phát triển đại lý mới, đào tạo, và marketing địa phương 6-12 tháng trước khi có doanh thu ổn định.",
+            action: "Xác định top 5 tỉnh chưa có đại lý nhưng có tiềm năng (dân số > 1 triệu, GDP/người trung bình). Lập kế hoạch tuyển 1 đại lý thí điểm tại mỗi tỉnh trong Q3/2026 với chính sách hỗ trợ 6 tháng đầu (chiết khấu 10%, hỗ trợ trưng bày).",
+          },
+        ];
+
         return (
           <Card>
-            <CardHeader><CardTitle className="text-sm">Key Insights — Địa lý</CardTitle></CardHeader>
-            <CardContent className="rounded-lg border border-border/60 p-3 space-y-2">
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Phát hiện</span>
-              <p className="text-xs leading-relaxed">
-                <b>{top?.region}</b> dẫn đầu với {formatVND(top?.revenue)} ({top?.pct?.toFixed(1)}% tổng doanh thu).{" "}
-                <b>{bot?.region}</b> đóng góp thấp nhất ({bot?.pct?.toFixed(1)}%). Tỉnh/TP mạnh nhất: <b>{topProv?.province_name}</b> ({formatVND(topProv?.revenue)}).
-              </p>
-              <div className="pl-2 border-l-2 border-amber-500/50 space-y-1">
-                <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Sự chênh lệch giữa 3 vùng phản ánh mật độ mạng lưới đại lý và sức mua theo vùng — thị trường không đồng đều đòi hỏi chiến lược tiếp cận khác biệt.
-                </p>
-              </div>
-              <div className="pl-2 border-l-2 border-emerald-500/50 space-y-1">
-                <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Tập trung nguồn lực phát triển đại lý tại {bot?.region} (dư địa lớn nhất). Đồng thời bảo vệ thị phần tại {top?.region} bằng chính sách hỗ trợ đại lý ưu tiên.
-                </p>
-              </div>
+            <CardHeader>
+              <CardTitle className="text-sm">Key Insights — Địa lý
+                <Badge variant="secondary" className="ml-2 text-[10px]">{insights.length} phát hiện</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {insights.map((ins) => (
+                <div key={ins.num} className="rounded-lg border border-border/60 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">#{ins.num}</span>
+                    <span className="text-xs font-semibold">{ins.title}</span>
+                  </div>
+                  <p className="text-xs leading-relaxed">{ins.find}</p>
+                  <div className="pl-2 border-l-2 border-amber-500/50">
+                    <p className="text-[10px] font-medium text-amber-400">Ý nghĩa</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.meaning}</p>
+                  </div>
+                  <div className="pl-2 border-l-2 border-emerald-500/50">
+                    <p className="text-[10px] font-medium text-emerald-400">Hành động</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{ins.action}</p>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         );

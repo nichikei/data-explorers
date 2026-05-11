@@ -90,6 +90,29 @@ def top_dealers(limit: int = 10):
     return df.to_dict(orient="records")
 
 
+@router.get("/basket")
+def basket():
+    """Co-occurrence of product groups within the same order."""
+    df = query("""
+        WITH order_groups AS (
+            SELECT DISTINCT
+                so_number,
+                COALESCE(group_name, 'Chưa phân loại') AS group_name
+            FROM fact_sales
+        )
+        SELECT
+            a.group_name AS group_a,
+            b.group_name AS group_b,
+            COUNT(DISTINCT a.so_number) AS co_count
+        FROM order_groups a
+        JOIN order_groups b
+          ON a.so_number = b.so_number AND a.group_name < b.group_name
+        GROUP BY a.group_name, b.group_name
+        ORDER BY co_count DESC
+    """)
+    return df.to_dict(orient="records")
+
+
 @router.get("/pareto")
 def pareto():
     df = query("""

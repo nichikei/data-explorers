@@ -23,6 +23,29 @@ def provinces():
     return df.to_dict(orient="records")
 
 
+@router.get("/province_growth")
+def province_growth():
+    """YoY growth Q1/2025 vs Q1/2026 by province."""
+    df = query("""
+        SELECT
+            COALESCE(province_name, 'Không xác định') AS province_name,
+            COALESCE(region, 'Không xác định')        AS region,
+            SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END) AS rev_q1_2025,
+            SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) AS rev_q1_2026,
+            ROUND(100.0 *
+                (SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) -
+                 SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END)) /
+                NULLIF(SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END), 0)
+            , 1) AS yoy_pct
+        FROM fact_sales
+        GROUP BY province_name, region
+        HAVING SUM(CASE WHEN fiscal_year=2025 AND fiscal_quarter=1 THEN line_total END) > 0
+            OR SUM(CASE WHEN fiscal_year=2026 AND fiscal_quarter=1 THEN line_total END) > 0
+        ORDER BY yoy_pct DESC NULLS LAST
+    """)
+    return df.to_dict(orient="records")
+
+
 @router.get("/regions")
 def regions():
     df = query("""
